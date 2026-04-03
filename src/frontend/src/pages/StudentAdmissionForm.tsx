@@ -11,6 +11,7 @@ const CLASSES = Array.from({ length: 12 }, (_, i) => `Class ${i + 1}`);
 const SECTIONS = ["A", "B", "C", "D"];
 const GENDERS = ["Male", "Female", "Other"];
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+const CATEGORIES = ["General", "OBC", "SC", "ST", "EWS", "Minority", "Other"];
 const MONTHS = [
   "Apr",
   "May",
@@ -69,11 +70,17 @@ function SectionHeader({
 function FieldLabel({
   label,
   required,
-}: { label: string; required?: boolean }) {
+  hint,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+}) {
   return (
     <p className="text-gray-400 text-xs mb-1">
       {label}
       {required && <span className="text-red-400 ml-0.5">*</span>}
+      {hint && <span className="text-gray-500 ml-1">{hint}</span>}
     </p>
   );
 }
@@ -260,8 +267,9 @@ function DocUpload({
 export function StudentAdmissionForm({
   onCancel,
   onSave,
+  initialData,
 }: StudentAdmissionFormProps) {
-  const [admNo] = useState(genAdmNo);
+  const [admNo, setAdmNo] = useState(initialData?.admNo || genAdmNo());
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({
     student: true,
     transport: true,
@@ -275,27 +283,33 @@ export function StudentAdmissionForm({
   const [errors, setErrors] = useState<Record<string, boolean>>({});
 
   // Student Details
-  const [rollNo, setRollNo] = useState("");
-  const [className, setClassName] = useState("Class 3");
-  const [section, setSection] = useState("A");
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [gender, setGender] = useState("Male");
-  const [dob, setDob] = useState("");
-  const [religion, setReligion] = useState("");
-  const [caste, setCaste] = useState("");
-  const [mobile, setMobile] = useState("");
-  const [email, setEmail] = useState("");
-  const [admDate, setAdmDate] = useState("2026-03-31");
-  const [bloodGroup, setBloodGroup] = useState("");
-  const [height, setHeight] = useState("");
-  const [weight, setWeight] = useState("");
-  const [aadhaar, setAadhaar] = useState("");
-  const [srNo, setSrNo] = useState("");
+  const [rollNo, setRollNo] = useState(initialData?.rollNo || "");
+  const [className, setClassName] = useState(
+    initialData?.className || "Class 3",
+  );
+  const [section, setSection] = useState(initialData?.section || "A");
+  const [fullName, setFullName] = useState(initialData?.name || "");
+  const [penNo, setPenNo] = useState(initialData?.penNo || "");
+  const [apaarNo, setApaarNo] = useState(initialData?.apaarNo || "");
+  const [gender, setGender] = useState(initialData?.gender || "Male");
+  const [dob, setDob] = useState(initialData?.dob || "");
+  const [religion, setReligion] = useState(initialData?.religion || "");
+  const [caste, setCaste] = useState(initialData?.caste || "");
+  const [category, setCategory] = useState(initialData?.category || "General");
+  const [mobile, setMobile] = useState(initialData?.contact || "");
+  const [email, setEmail] = useState(initialData?.email || "");
+  const [admDate, setAdmDate] = useState(
+    initialData?.admissionDate || new Date().toISOString().split("T")[0],
+  );
+  const [bloodGroup, setBloodGroup] = useState(initialData?.bloodGroup || "");
+  const [height, setHeight] = useState(initialData?.height || "");
+  const [weight, setWeight] = useState(initialData?.weight || "");
+  const [aadhaar, setAadhaar] = useState(initialData?.aadharNo || "");
+  const [srNo, setSrNo] = useState(initialData?.srNo || "");
   const [studentPhoto, setStudentPhoto] = useState<string | null>(null);
 
   // Transport
-  const [route, setRoute] = useState("");
+  const [route, setRoute] = useState(initialData?.route || "");
   const [pickupPoint, setPickupPoint] = useState("");
   const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
 
@@ -303,20 +317,26 @@ export function StudentAdmissionForm({
   const [fixedDiscount, setFixedDiscount] = useState("0");
 
   // Parent
-  const [fatherName, setFatherName] = useState("");
+  const [fatherName, setFatherName] = useState(initialData?.fatherName || "");
   const [fatherPhoto, setFatherPhoto] = useState<string | null>(null);
-  const [motherName, setMotherName] = useState("");
+  const [motherName, setMotherName] = useState(initialData?.motherName || "");
   const [motherPhoto, setMotherPhoto] = useState<string | null>(null);
   const [guardianType, setGuardianType] = useState<
     "Father" | "Mother" | "Other"
   >("Father");
-  const [guardianName, setGuardianName] = useState("");
+  const [guardianName, setGuardianName] = useState(
+    initialData?.guardianName || "",
+  );
   const [guardianRelation, setGuardianRelation] = useState("Father");
-  const [guardianPhone, setGuardianPhone] = useState("");
+  const [guardianPhone, setGuardianPhone] = useState(
+    initialData?.guardianPhone || "",
+  );
   const [guardianAddress, setGuardianAddress] = useState("");
 
   // Address
-  const [currentAddress, setCurrentAddress] = useState("");
+  const [currentAddress, setCurrentAddress] = useState(
+    initialData?.address || "",
+  );
   const [sameAsGuardian, setSameAsGuardian] = useState(false);
   const [permanentAddress, setPermanentAddress] = useState("");
   const [sameAsCurrent, setSameAsCurrent] = useState(false);
@@ -330,9 +350,13 @@ export function StudentAdmissionForm({
   const [rte, setRte] = useState<"Yes" | "No">("No");
 
   // Prev School
-  const [prevSchool, setPrevSchool] = useState("");
-  const [lastClass, setLastClass] = useState("");
-  const [tcNo, setTcNo] = useState("");
+  const [prevSchool, setPrevSchool] = useState(
+    initialData?.prevSchoolName || "",
+  );
+  const [lastClass, setLastClass] = useState(
+    initialData?.prevSchoolClass || "",
+  );
+  const [tcNo, setTcNo] = useState(initialData?.prevSchoolTcNo || "");
   const [note, setNote] = useState("");
 
   // Documents
@@ -355,14 +379,11 @@ export function StudentAdmissionForm({
   const handleSubmit = () => {
     const newErrors: Record<string, boolean> = {};
     if (!rollNo) newErrors.rollNo = true;
-    if (!firstName) newErrors.firstName = true;
-    if (!lastName) newErrors.lastName = true;
+    if (!fullName) newErrors.fullName = true;
     if (!dob) newErrors.dob = true;
-    if (!guardianName) newErrors.guardianName = true;
-    if (!guardianPhone) newErrors.guardianPhone = true;
+    // Guardian name and phone are now OPTIONAL — removed from required validation
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
-      // Scroll to top
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -371,13 +392,30 @@ export function StudentAdmissionForm({
       rollNo,
       className,
       section,
-      name: `${firstName} ${lastName}`,
+      name: fullName,
       gender,
       dob,
       contact: mobile,
       fatherName,
+      motherName,
+      category,
       address: currentAddress || guardianAddress,
       status: "Active",
+      admissionDate: admDate,
+      aadharNo: aadhaar,
+      srNo,
+      penNo,
+      apaarNo,
+      bloodGroup,
+      religion,
+      caste,
+      guardianName,
+      guardianPhone,
+      route,
+      prevSchoolName: prevSchool,
+      prevSchoolTcNo: tcNo,
+      prevSchoolLeavingDate: "",
+      prevSchoolClass: lastClass,
     });
   };
 
@@ -394,7 +432,9 @@ export function StudentAdmissionForm({
         <div>
           <h1 className="text-white font-bold text-lg">Student Admission</h1>
           <p className="text-gray-400 text-xs">
-            Fill in all the required details to register a new student.
+            {initialData
+              ? `Editing: ${initialData.name || "Student"}`
+              : "Fill in all the required details to register a new student."}
           </p>
         </div>
         <div className="flex gap-2">
@@ -431,7 +471,13 @@ export function StudentAdmissionForm({
               <div className="grid grid-cols-3 gap-3 mb-3">
                 <div>
                   <FieldLabel label="Admission No" />
-                  <TextInput value={admNo} readOnly />
+                  {/* Editable admission number field — user can type their own */}
+                  <TextInput
+                    value={admNo}
+                    onChange={setAdmNo}
+                    placeholder="e.g. ADM-2024-001"
+                    data-ocid="admission.admno_input"
+                  />
                 </div>
                 <div>
                   <FieldLabel label="Roll Number" required />
@@ -460,22 +506,14 @@ export function StudentAdmissionForm({
                     data-ocid="admission.section_select"
                   />
                 </div>
-                <div>
-                  <FieldLabel label="First Name" required />
+                <div className="col-span-2">
+                  <FieldLabel label="Full Name" required />
                   <TextInput
-                    value={firstName}
-                    onChange={setFirstName}
-                    error={errors.firstName}
-                    data-ocid="admission.firstname_input"
-                  />
-                </div>
-                <div>
-                  <FieldLabel label="Last Name" required />
-                  <TextInput
-                    value={lastName}
-                    onChange={setLastName}
-                    error={errors.lastName}
-                    data-ocid="admission.lastname_input"
+                    value={fullName}
+                    onChange={setFullName}
+                    placeholder="Enter student's full name"
+                    error={errors.fullName}
+                    data-ocid="admission.fullname_input"
                   />
                 </div>
                 <div>
@@ -494,6 +532,26 @@ export function StudentAdmissionForm({
                     type="date"
                     error={errors.dob}
                     data-ocid="admission.dob_input"
+                  />
+                </div>
+                {/* Category field */}
+                <div>
+                  <FieldLabel label="Category" />
+                  <SelectInput
+                    value={category}
+                    onChange={setCategory}
+                    options={CATEGORIES}
+                    placeholder="Select Category"
+                    data-ocid="admission.category_select"
+                  />
+                </div>
+                <div>
+                  <FieldLabel label="Blood Group" />
+                  <SelectInput
+                    value={bloodGroup}
+                    onChange={setBloodGroup}
+                    options={BLOOD_GROUPS}
+                    placeholder="Select"
                   />
                 </div>
                 <div>
@@ -531,15 +589,6 @@ export function StudentAdmissionForm({
                   />
                 </div>
                 <div>
-                  <FieldLabel label="Blood Group" />
-                  <SelectInput
-                    value={bloodGroup}
-                    onChange={setBloodGroup}
-                    options={BLOOD_GROUPS}
-                    placeholder="Select"
-                  />
-                </div>
-                <div>
                   <FieldLabel label="Height (cm)" />
                   <TextInput
                     value={height}
@@ -567,6 +616,22 @@ export function StudentAdmissionForm({
                 <div>
                   <FieldLabel label="S.R. No." />
                   <TextInput value={srNo} onChange={setSrNo} />
+                </div>
+                <div>
+                  <FieldLabel label="PEN No." />
+                  <TextInput
+                    value={penNo}
+                    onChange={setPenNo}
+                    placeholder="Permanent Education Number"
+                  />
+                </div>
+                <div>
+                  <FieldLabel label="APAAR No." />
+                  <TextInput
+                    value={apaarNo}
+                    onChange={setApaarNo}
+                    placeholder="Academic Bank of Credits"
+                  />
                 </div>
               </div>
               <div>
@@ -808,11 +873,15 @@ export function StudentAdmissionForm({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <FieldLabel label="Guardian Name" required />
+                    {/* Guardian Name: Optional */}
+                    <FieldLabel
+                      label="Guardian Name"
+                      required={false}
+                      hint="(Optional)"
+                    />
                     <TextInput
                       value={guardianName}
                       onChange={setGuardianName}
-                      error={errors.guardianName}
                       data-ocid="admission.guardian_name_input"
                     />
                   </div>
@@ -824,12 +893,16 @@ export function StudentAdmissionForm({
                     />
                   </div>
                   <div>
-                    <FieldLabel label="Guardian Phone" required />
+                    {/* Guardian Phone: Optional */}
+                    <FieldLabel
+                      label="Guardian Phone"
+                      required={false}
+                      hint="(Optional)"
+                    />
                     <TextInput
                       value={guardianPhone}
                       onChange={setGuardianPhone}
                       type="tel"
-                      error={errors.guardianPhone}
                       data-ocid="admission.guardian_phone_input"
                     />
                   </div>

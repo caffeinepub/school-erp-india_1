@@ -2,8 +2,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Bell,
+  Building2,
   Calendar,
   CheckSquare,
+  ChevronDown,
   LogOut,
   Menu,
   RefreshCw,
@@ -11,7 +13,9 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
+import { useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import { useSchool } from "../../context/SchoolContext";
 
 const ROLE_COLORS: Record<string, string> = {
   super_admin: "bg-red-500/20 text-red-300 border-red-500/30",
@@ -41,6 +45,9 @@ interface HeaderProps {
 
 export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
   const { user, logout } = useAuth();
+  const { branches, activeBranch, setActiveBranch } = useSchool();
+  const [branchOpen, setBranchOpen] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
 
   return (
     <header
@@ -59,7 +66,49 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
         <span className="text-white font-semibold text-sm hidden sm:block">
           School ERP
         </span>
+
+        {/* Branch Switcher */}
+        <div className="relative" ref={dropRef}>
+          <button
+            type="button"
+            onClick={() => setBranchOpen((v) => !v)}
+            className="flex items-center gap-1 text-xs text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-600 rounded px-2 py-1 transition"
+            data-ocid="header.branch.toggle"
+          >
+            <Building2 size={12} className="text-blue-400" />
+            <span className="hidden sm:inline max-w-[120px] truncate">
+              {activeBranch?.name ?? "Select Branch"}
+            </span>
+            <ChevronDown size={11} />
+          </button>
+          {branchOpen && (
+            <div
+              className="absolute top-full left-0 mt-1 z-50 min-w-[160px] rounded border border-gray-600 shadow-xl"
+              style={{ background: "#1e293b" }}
+            >
+              {branches.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveBranch(b);
+                    setBranchOpen(false);
+                  }}
+                  data-ocid="header.branch.item"
+                  className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition ${
+                    activeBranch?.id === b.id
+                      ? "text-blue-400 font-semibold"
+                      : "text-gray-300"
+                  }`}
+                >
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
       <div className="flex items-center gap-2 flex-1 max-w-xs mx-4">
         <div className="flex items-center bg-gray-800 rounded px-2 py-1 flex-1">
           <Search size={14} className="text-gray-400 mr-1" />
@@ -70,6 +119,7 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
           />
         </div>
       </div>
+
       <div className="flex items-center gap-2">
         {isSyncing ? (
           <span className="flex items-center gap-1 text-yellow-400 text-xs bg-yellow-900/30 px-2 py-0.5 rounded-full">

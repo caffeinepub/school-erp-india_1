@@ -7,6 +7,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { DEMO_USERS, useAuth } from "../context/AuthContext";
+import { useSchool } from "../context/SchoolContext";
 import { permissionModules } from "../data/permissions";
 import { getSchoolProfile, saveSchoolProfile } from "../data/schoolProfile";
 import type { Role, RolePermissions } from "../types/auth";
@@ -260,6 +261,22 @@ export function Settings() {
   const [newFeature, setNewFeature] = useState("");
   const [newPhoto, setNewPhoto] = useState("");
   const [activePermRole, setActivePermRole] = useState<Role>("admin");
+  const {
+    branches,
+    activeBranch,
+    setActiveBranch,
+    addBranch,
+    updateBranch,
+    deleteBranch,
+  } = useSchool();
+  const [branchForm, setBranchForm] = useState({
+    name: "",
+    address: "",
+    contact: "",
+    email: "",
+    principal: "",
+  });
+  const [editingBranch, setEditingBranch] = useState<string | null>(null);
 
   const handleSaveGeneral = () => {
     toast.success("General settings saved!");
@@ -311,6 +328,12 @@ export function Settings() {
             className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white"
           >
             Users
+          </TabsTrigger>
+          <TabsTrigger
+            value="branches"
+            className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+          >
+            Branches
           </TabsTrigger>
         </TabsList>
 
@@ -688,6 +711,297 @@ export function Settings() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </TabsContent>
+        <TabsContent value="branches">
+          <div
+            className="rounded-lg p-5 max-w-3xl"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <h3 className="text-white font-semibold text-sm mb-4">
+              School Branches
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+              <div>
+                <label
+                  htmlFor="branch-name"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Branch Name *
+                </label>
+                <input
+                  id="branch-name"
+                  value={
+                    editingBranch
+                      ? (branches.find((b) => b.id === editingBranch)?.name ??
+                        branchForm.name)
+                      : branchForm.name
+                  }
+                  onChange={(e) => {
+                    if (editingBranch) {
+                      const b = branches.find((x) => x.id === editingBranch);
+                      if (b) updateBranch({ ...b, name: e.target.value });
+                    } else {
+                      setBranchForm((f) => ({ ...f, name: e.target.value }));
+                    }
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-orange-500"
+                  placeholder="e.g. North Campus"
+                  data-ocid="branches.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="branch-principal"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Principal Name
+                </label>
+                <input
+                  id="branch-principal"
+                  value={
+                    editingBranch
+                      ? (branches.find((b) => b.id === editingBranch)
+                          ?.principal ?? branchForm.principal)
+                      : branchForm.principal
+                  }
+                  onChange={(e) => {
+                    if (editingBranch) {
+                      const b = branches.find((x) => x.id === editingBranch);
+                      if (b) updateBranch({ ...b, principal: e.target.value });
+                    } else {
+                      setBranchForm((f) => ({
+                        ...f,
+                        principal: e.target.value,
+                      }));
+                    }
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-orange-500"
+                  placeholder="Principal name"
+                  data-ocid="branches.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="branch-address"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Address
+                </label>
+                <input
+                  id="branch-address"
+                  value={
+                    editingBranch
+                      ? (branches.find((b) => b.id === editingBranch)
+                          ?.address ?? branchForm.address)
+                      : branchForm.address
+                  }
+                  onChange={(e) => {
+                    if (editingBranch) {
+                      const b = branches.find((x) => x.id === editingBranch);
+                      if (b) updateBranch({ ...b, address: e.target.value });
+                    } else {
+                      setBranchForm((f) => ({ ...f, address: e.target.value }));
+                    }
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-orange-500"
+                  placeholder="Branch address"
+                  data-ocid="branches.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="branch-contact"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Contact
+                </label>
+                <input
+                  id="branch-contact"
+                  value={
+                    editingBranch
+                      ? (branches.find((b) => b.id === editingBranch)
+                          ?.contact ?? branchForm.contact)
+                      : branchForm.contact
+                  }
+                  onChange={(e) => {
+                    if (editingBranch) {
+                      const b = branches.find((x) => x.id === editingBranch);
+                      if (b) updateBranch({ ...b, contact: e.target.value });
+                    } else {
+                      setBranchForm((f) => ({ ...f, contact: e.target.value }));
+                    }
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-orange-500"
+                  placeholder="Phone number"
+                  data-ocid="branches.input"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="branch-email"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Email
+                </label>
+                <input
+                  id="branch-email"
+                  value={
+                    editingBranch
+                      ? (branches.find((b) => b.id === editingBranch)?.email ??
+                        branchForm.email)
+                      : branchForm.email
+                  }
+                  onChange={(e) => {
+                    if (editingBranch) {
+                      const b = branches.find((x) => x.id === editingBranch);
+                      if (b) updateBranch({ ...b, email: e.target.value });
+                    } else {
+                      setBranchForm((f) => ({ ...f, email: e.target.value }));
+                    }
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-orange-500"
+                  placeholder="branch@school.edu.in"
+                  data-ocid="branches.input"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 mb-5">
+              {editingBranch ? (
+                <>
+                  <Button
+                    size="sm"
+                    className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-7"
+                    onClick={() => {
+                      setEditingBranch(null);
+                      toast.success("Branch updated");
+                    }}
+                    data-ocid="branches.save_button"
+                  >
+                    Update Branch
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-gray-400 hover:text-white text-xs h-7"
+                    onClick={() => setEditingBranch(null)}
+                    data-ocid="branches.cancel_button"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs h-7"
+                  onClick={() => {
+                    if (!branchForm.name.trim()) {
+                      toast.error("Branch name is required");
+                      return;
+                    }
+                    addBranch(branchForm);
+                    setBranchForm({
+                      name: "",
+                      address: "",
+                      contact: "",
+                      email: "",
+                      principal: "",
+                    });
+                    toast.success("Branch added");
+                  }}
+                  data-ocid="branches.primary_button"
+                >
+                  <Plus size={12} className="mr-1" /> Add Branch
+                </Button>
+              )}
+            </div>
+            <div className="overflow-hidden rounded border border-gray-700">
+              <table className="w-full text-xs" data-ocid="branches.table">
+                <thead>
+                  <tr style={{ background: "#111827" }}>
+                    <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                      Branch Name
+                    </th>
+                    <th className="text-left px-3 py-2 text-gray-400 font-medium hidden sm:table-cell">
+                      Principal
+                    </th>
+                    <th className="text-left px-3 py-2 text-gray-400 font-medium hidden md:table-cell">
+                      Contact
+                    </th>
+                    <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                      Status
+                    </th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {branches.map((b, i) => (
+                    <tr
+                      key={b.id}
+                      style={{
+                        borderTop: "1px solid #374151",
+                        background: i % 2 === 0 ? "#0f1117" : "#111827",
+                      }}
+                      data-ocid={`branches.item.${i + 1}`}
+                    >
+                      <td className="px-3 py-2 text-white font-medium">
+                        {b.name}
+                      </td>
+                      <td className="px-3 py-2 text-gray-300 hidden sm:table-cell">
+                        {b.principal || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-gray-300 hidden md:table-cell">
+                        {b.contact || "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        {activeBranch?.id === b.id ? (
+                          <span className="text-green-400 text-[10px] font-semibold">
+                            ● Active
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveBranch(b);
+                              toast.success(`Switched to ${b.name}`);
+                            }}
+                            className="text-blue-400 text-[10px] hover:underline"
+                            data-ocid="branches.toggle"
+                          >
+                            Set Active
+                          </button>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2 justify-end">
+                          <button
+                            type="button"
+                            onClick={() => setEditingBranch(b.id)}
+                            className="text-blue-400 hover:text-blue-300 text-[10px]"
+                            data-ocid={`branches.edit_button.${i + 1}`}
+                          >
+                            Edit
+                          </button>
+                          {b.id !== "main" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                deleteBranch(b.id);
+                                toast.success("Branch deleted");
+                              }}
+                              className="text-red-400 hover:text-red-300 text-[10px]"
+                              data-ocid={`branches.delete_button.${i + 1}`}
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import { Layout } from "./components/layout/Layout";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { SchoolProvider } from "./context/SchoolContext";
 import { Academics } from "./pages/Academics";
 import { Alumni } from "./pages/Alumni";
 import { Attendance } from "./pages/Attendance";
@@ -19,6 +20,8 @@ import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Students } from "./pages/Students";
 import { Transport } from "./pages/Transport";
+import { WhatsApp } from "./pages/WhatsApp";
+import { seedDemoDataIfEmpty } from "./utils/demoData";
 
 function getPath() {
   return window.location.hash.replace("#", "") || "/";
@@ -30,6 +33,11 @@ function AppInner() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Seed demo data once on mount
+  useEffect(() => {
+    seedDemoDataIfEmpty();
+  }, []);
 
   useEffect(() => {
     const handler = () => setPath(getPath());
@@ -69,6 +77,7 @@ function AppInner() {
     if (path === "/transport") return <Transport />;
     if (path === "/reports") return <Reports />;
     if (path === "/communicate") return <Communicate />;
+    if (path === "/whatsapp") return <WhatsApp />;
     if (path === "/inventory") return <Inventory />;
     if (path === "/expenses") return <Expenses />;
     if (path === "/certificate") return <Certificate />;
@@ -95,8 +104,10 @@ function AppInner() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppInner />
-      <Toaster />
+      <SchoolProvider>
+        <AppInner />
+        <Toaster />
+      </SchoolProvider>
     </AuthProvider>
   );
 }

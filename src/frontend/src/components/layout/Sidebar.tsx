@@ -18,6 +18,7 @@ import {
   GraduationCap,
   Home,
   LayoutDashboard,
+  MessageCircle,
   MessageSquare,
   Monitor,
   Package,
@@ -232,6 +233,12 @@ const navModules: NavModule[] = [
     ],
   },
   {
+    icon: <MessageCircle size={15} style={{ color: "#25D366" }} />,
+    label: "WhatsApp",
+    path: "/whatsapp",
+    permissionModule: "Communicate",
+  },
+  {
     icon: <Download size={15} />,
     label: "Download Center",
     path: "/",
@@ -409,6 +416,18 @@ export function Sidebar({ collapsed, currentPath, navigate }: SidebarProps) {
               >
                 <span className="flex-shrink-0">{mod.icon}</span>
                 <span className="flex-1 text-left">{mod.label}</span>
+                {mod.label === "WhatsApp" && (
+                  <span
+                    className="text-[9px] px-1 py-0 rounded font-bold"
+                    style={{
+                      background: "#25D36620",
+                      color: "#25D366",
+                      border: "1px solid #25D36640",
+                    }}
+                  >
+                    NEW
+                  </span>
+                )}
                 {mod.children &&
                   (isExpandedState ? (
                     <ChevronDown size={12} />

@@ -6,12 +6,13 @@ import {
   FileText,
   GraduationCap,
   MessageSquare,
+  Pencil,
   Printer,
   Upload,
   UserPlus,
   X,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { StudentAdmissionForm } from "./StudentAdmissionForm";
 
@@ -29,7 +30,28 @@ interface Student {
   route: string;
   schNo: string;
   oldBalance: number;
-  status: "Active" | "Inactive";
+  status: "Active" | "Inactive" | "Discontinued";
+  category?: string;
+  // Extra fields
+  admissionDate?: string;
+  aadharNo?: string;
+  srNo?: string;
+  penNo?: string;
+  apaarNo?: string;
+  prevSchoolName?: string;
+  prevSchoolTcNo?: string;
+  prevSchoolLeavingDate?: string;
+  prevSchoolClass?: string;
+  gender?: string;
+  bloodGroup?: string;
+  religion?: string;
+  address?: string;
+  guardianName?: string;
+  guardianPhone?: string;
+  // Discontinued fields
+  leavingDate?: string;
+  leavingReason?: string;
+  leavingRemarks?: string;
 }
 
 const MONTHS = [
@@ -58,6 +80,57 @@ const SORT_FIELDS = [
 
 const FILTER_FIELDS = ["Admission No.", "Student Name", "Father Name"];
 
+const CSV_HEADERS = [
+  "Adm No",
+  "Full Name",
+  "Admission Date",
+  "Aadhar No",
+  "SR No",
+  "PEN No",
+  "APAAR No",
+  "Father",
+  "Mother",
+  "Class",
+  "Section",
+  "Roll No",
+  "DOB",
+  "Contact",
+  "Route",
+  "Sch No",
+  "Old Balance",
+  "Category",
+  "Prev School Name",
+  "Prev School TC No",
+  "Prev School Leaving Date",
+  "Prev School Class",
+];
+
+const LEAVING_REASONS = [
+  "TC Issued",
+  "Transfer",
+  "Family Relocation",
+  "Fee Default",
+  "Passed Out",
+  "Other",
+];
+
+// Print list columns
+const PRINT_COLUMNS = [
+  { key: "admNo", label: "Adm No" },
+  { key: "name", label: "Name" },
+  { key: "fatherName", label: "Father" },
+  { key: "motherName", label: "Mother" },
+  { key: "className", label: "Class" },
+  { key: "section", label: "Section" },
+  { key: "rollNo", label: "Roll No" },
+  { key: "dob", label: "DOB" },
+  { key: "contact", label: "Contact" },
+  { key: "route", label: "Route" },
+  { key: "category", label: "Category" },
+  { key: "status", label: "Status" },
+  { key: "oldBalance", label: "Old Balance" },
+];
+
 function getFieldValue(s: Student, field: string): string {
   const map: Record<string, string> = {
     "Admission No.": s.admNo,
@@ -67,13 +140,1866 @@ function getFieldValue(s: Student, field: string): string {
   return (map[field] || "").toLowerCase();
 }
 
+function parseCSV(text: string): Student[] {
+  const lines = text.trim().split("\n");
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  const students: Student[] = [];
+  let nextId = Date.now();
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(",").map((c) => c.trim());
+    if (cols.length < 2) continue;
+    const get = (h: string) => cols[headers.indexOf(h)] ?? "";
+    students.push({
+      id: nextId++,
+      admNo: get("Adm No"),
+      name: get("Full Name"),
+      admissionDate: get("Admission Date"),
+      aadharNo: get("Aadhar No"),
+      srNo: get("SR No"),
+      penNo: get("PEN No"),
+      apaarNo: get("APAAR No"),
+      fatherName: get("Father"),
+      motherName: get("Mother"),
+      className: get("Class"),
+      section: get("Section"),
+      rollNo: get("Roll No"),
+      dob: get("DOB"),
+      contact: get("Contact"),
+      route: get("Route") || "N.A.",
+      schNo: get("Sch No"),
+      oldBalance: Number(get("Old Balance")) || 0,
+      category: get("Category") || "General",
+      prevSchoolName: get("Prev School Name"),
+      prevSchoolTcNo: get("Prev School TC No"),
+      prevSchoolLeavingDate: get("Prev School Leaving Date"),
+      prevSchoolClass: get("Prev School Class"),
+      status: "Active",
+    });
+  }
+  return students;
+}
+
+// ─── Admission Form Print Preview ─────────────────────────────────────────────
+function AdmissionFormPreview({
+  student,
+  onClose,
+}: {
+  student: Student;
+  onClose: () => void;
+}) {
+  const [template, setTemplate] = useState<1 | 2 | 3>(1);
+
+  const schoolProfile = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("erp_school_profile") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const schoolName = schoolProfile.name || "Delhi Public School";
+  const schoolAddress = schoolProfile.address || "Sector 14, Dwarka, New Delhi";
+  const schoolPhone = schoolProfile.phone || "";
+
+  const handlePrint = () => {
+    const el = document.getElementById("adm-form-print-area");
+    if (!el) return;
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    win.document.write(
+      `<html><head><title>Admission Form - ${student.name}</title><style>@page{size:A4;margin:10mm}body{margin:0;font-family:Arial,sans-serif;font-size:10px}*{box-sizing:border-box}table{border-collapse:collapse;width:100%}th,td{padding:4px 6px}@media print{.no-print{display:none}}</style></head><body>${el.innerHTML}</body></html>`,
+    );
+    win.document.close();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 400);
+  };
+
+  const renderTemplate1 = () => (
+    <div
+      style={{
+        background: "#fff",
+        color: "#1a1a1a",
+        fontFamily: "Arial, sans-serif",
+        fontSize: 10,
+        padding: 20,
+        width: "100%",
+        maxWidth: 700,
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          textAlign: "center",
+          borderBottom: "3px double #1e3a5f",
+          paddingBottom: 10,
+          marginBottom: 10,
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: 18,
+            color: "#1e3a5f",
+            letterSpacing: 1,
+          }}
+        >
+          {schoolName.toUpperCase()}
+        </div>
+        <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>
+          {schoolAddress}
+          {schoolPhone ? ` | Ph: ${schoolPhone}` : ""}
+        </div>
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: 14,
+            marginTop: 8,
+            background: "#1e3a5f",
+            color: "#fff",
+            padding: "4px 0",
+            letterSpacing: 2,
+          }}
+        >
+          ADMISSION FORM
+        </div>
+      </div>
+
+      {/* Photo + Adm No */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: 10,
+        }}
+      >
+        <table style={{ width: "70%", borderCollapse: "collapse" }}>
+          <tbody>
+            <tr>
+              <td
+                style={{
+                  border: "1px solid #aaa",
+                  padding: "4px 8px",
+                  background: "#e8f0fe",
+                  fontWeight: 700,
+                  width: 140,
+                }}
+              >
+                Admission No.
+              </td>
+              <td style={{ border: "1px solid #aaa", padding: "4px 8px" }}>
+                {student.admNo}
+              </td>
+              <td
+                style={{
+                  border: "1px solid #aaa",
+                  padding: "4px 8px",
+                  background: "#e8f0fe",
+                  fontWeight: 700,
+                }}
+              >
+                Date
+              </td>
+              <td style={{ border: "1px solid #aaa", padding: "4px 8px" }}>
+                {student.admissionDate || ""}
+              </td>
+            </tr>
+            <tr>
+              <td
+                style={{
+                  border: "1px solid #aaa",
+                  padding: "4px 8px",
+                  background: "#e8f0fe",
+                  fontWeight: 700,
+                }}
+              >
+                Class
+              </td>
+              <td style={{ border: "1px solid #aaa", padding: "4px 8px" }}>
+                {student.className}
+              </td>
+              <td
+                style={{
+                  border: "1px solid #aaa",
+                  padding: "4px 8px",
+                  background: "#e8f0fe",
+                  fontWeight: 700,
+                }}
+              >
+                Section
+              </td>
+              <td style={{ border: "1px solid #aaa", padding: "4px 8px" }}>
+                {student.section}
+              </td>
+            </tr>
+            <tr>
+              <td
+                style={{
+                  border: "1px solid #aaa",
+                  padding: "4px 8px",
+                  background: "#e8f0fe",
+                  fontWeight: 700,
+                }}
+              >
+                Roll No.
+              </td>
+              <td style={{ border: "1px solid #aaa", padding: "4px 8px" }}>
+                {student.rollNo}
+              </td>
+              <td
+                style={{
+                  border: "1px solid #aaa",
+                  padding: "4px 8px",
+                  background: "#e8f0fe",
+                  fontWeight: 700,
+                }}
+              >
+                SR No.
+              </td>
+              <td style={{ border: "1px solid #aaa", padding: "4px 8px" }}>
+                {student.srNo || ""}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div
+          style={{
+            width: 90,
+            height: 110,
+            border: "2px solid #1e3a5f",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexDirection: "column",
+            color: "#aaa",
+            fontSize: 9,
+            gap: 4,
+          }}
+        >
+          <div style={{ fontSize: 22 }}>👤</div>
+          <span>PHOTO</span>
+        </div>
+      </div>
+
+      {/* Section 2: Personal Details */}
+      <SectionBlock title="PERSONAL DETAILS" color="#1e3a5f">
+        <TwoColTable
+          rows={[
+            ["Full Name", student.name, "Gender", student.gender || ""],
+            [
+              "Date of Birth",
+              student.dob,
+              "Blood Group",
+              student.bloodGroup || "",
+            ],
+            [
+              "Category",
+              student.category || "",
+              "Religion",
+              student.religion || "",
+            ],
+            ["Nationality", "Indian", "Aadhaar No.", student.aadharNo || ""],
+            [
+              "PEN No.",
+              student.penNo || "",
+              "APAAR No.",
+              student.apaarNo || "",
+            ],
+          ]}
+        />
+      </SectionBlock>
+
+      {/* Section 3: Parent/Guardian */}
+      <SectionBlock title="PARENT / GUARDIAN DETAILS" color="#1e3a5f">
+        <TwoColTable
+          rows={[
+            [
+              "Father's Name",
+              student.fatherName,
+              "Mother's Name",
+              student.motherName,
+            ],
+            [
+              "Contact No.",
+              student.contact,
+              "Guardian Name",
+              student.guardianName || "",
+            ],
+          ]}
+        />
+      </SectionBlock>
+
+      {/* Section 4: Address */}
+      <SectionBlock title="ADDRESS DETAILS" color="#1e3a5f">
+        <TwoColTable
+          rows={[
+            [
+              "Current Address",
+              student.address || "",
+              "Permanent Address",
+              student.address || "",
+            ],
+          ]}
+        />
+      </SectionBlock>
+
+      {/* Section 5: Previous School */}
+      <SectionBlock title="PREVIOUS SCHOOL DETAILS" color="#1e3a5f">
+        <TwoColTable
+          rows={[
+            [
+              "School Name",
+              student.prevSchoolName || "",
+              "Last Class",
+              student.prevSchoolClass || "",
+            ],
+            [
+              "TC Number",
+              student.prevSchoolTcNo || "",
+              "Leaving Date",
+              student.prevSchoolLeavingDate || "",
+            ],
+          ]}
+        />
+      </SectionBlock>
+
+      {/* Section 6: Transport */}
+      <SectionBlock title="TRANSPORT DETAILS" color="#1e3a5f">
+        <TwoColTable
+          rows={[
+            ["Route", student.route || "N.A.", "Sch. No.", student.schNo || ""],
+          ]}
+        />
+      </SectionBlock>
+
+      {/* Section 7: Documents */}
+      <SectionBlock title="DOCUMENTS SUBMITTED" color="#1e3a5f">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 4,
+            padding: "4px 0",
+          }}
+        >
+          {[
+            "Birth Certificate",
+            "Aadhaar Card",
+            "Transfer Certificate",
+            "Report Card",
+            "Passport Photo",
+            "Address Proof",
+          ].map((doc) => (
+            <div
+              key={doc}
+              style={{ display: "flex", alignItems: "center", gap: 6 }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 12,
+                  height: 12,
+                  border: "1px solid #555",
+                }}
+              />
+              <span>{doc}</span>
+            </div>
+          ))}
+        </div>
+      </SectionBlock>
+
+      {/* Section 8: Declaration */}
+      <SectionBlock title="DECLARATION" color="#1e3a5f">
+        <p style={{ marginBottom: 8, lineHeight: 1.6 }}>
+          I hereby declare that the information provided above is true and
+          correct to the best of my knowledge. I agree to abide by the rules and
+          regulations of the school.
+        </p>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            marginTop: 24,
+            gap: 16,
+          }}
+        >
+          <div
+            style={{
+              textAlign: "center",
+              borderTop: "1px solid #555",
+              paddingTop: 4,
+            }}
+          >
+            Parent / Guardian Signature
+          </div>
+          <div
+            style={{
+              textAlign: "center",
+              borderTop: "1px solid #555",
+              paddingTop: 4,
+            }}
+          >
+            Date
+          </div>
+          <div
+            style={{
+              textAlign: "center",
+              borderTop: "1px solid #555",
+              paddingTop: 4,
+            }}
+          >
+            Principal Signature
+          </div>
+        </div>
+      </SectionBlock>
+    </div>
+  );
+
+  const renderTemplate2 = () => (
+    <div
+      style={{
+        background: "#fff",
+        color: "#1a1a1a",
+        fontFamily: "'Segoe UI', Arial, sans-serif",
+        fontSize: 10,
+        padding: 20,
+        width: "100%",
+        maxWidth: 700,
+      }}
+    >
+      {/* Modern gradient header */}
+      <div
+        style={{
+          background: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+          color: "#fff",
+          padding: "16px 20px",
+          borderRadius: 8,
+          marginBottom: 16,
+          display: "flex",
+          alignItems: "center",
+          gap: 16,
+        }}
+      >
+        <div
+          style={{
+            width: 60,
+            height: 60,
+            borderRadius: "50%",
+            background: "rgba(255,255,255,0.2)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 28,
+            flexShrink: 0,
+          }}
+        >
+          🏫
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: 0.5 }}>
+            {schoolName}
+          </div>
+          <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
+            {schoolAddress}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ fontWeight: 700, fontSize: 13 }}>ADMISSION FORM</div>
+          <div style={{ fontSize: 10, opacity: 0.85, marginTop: 2 }}>
+            Adm. No: {student.admNo}
+          </div>
+        </div>
+      </div>
+
+      {/* Photo circle + name */}
+      <div style={{ textAlign: "center", marginBottom: 16 }}>
+        <div
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: "50%",
+            border: "3px solid #6366f1",
+            background: "#f3f4f6",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 36,
+            margin: "0 auto 8px",
+          }}
+        >
+          👤
+        </div>
+        <div style={{ fontWeight: 700, fontSize: 16 }}>{student.name}</div>
+        <div style={{ color: "#6366f1", fontSize: 11 }}>
+          Class {student.className} | Section {student.section}
+        </div>
+        <div style={{ color: "#6b7280", fontSize: 10, marginTop: 2 }}>
+          Admitted: {student.admissionDate || "—"}
+        </div>
+      </div>
+
+      {/* Card grid */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          marginBottom: 12,
+        }}
+      >
+        <CardSection
+          title="📋 Academic Info"
+          items={[
+            { label: "Roll No.", value: student.rollNo },
+            { label: "Class", value: student.className },
+            { label: "Section", value: student.section },
+            { label: "SR No.", value: student.srNo || "—" },
+            { label: "Category", value: student.category || "—" },
+          ]}
+        />
+        <CardSection
+          title="👤 Personal Info"
+          items={[
+            { label: "Date of Birth", value: student.dob },
+            { label: "Gender", value: student.gender || "—" },
+            { label: "Blood Group", value: student.bloodGroup || "—" },
+            { label: "Aadhaar No.", value: student.aadharNo || "—" },
+            { label: "Religion", value: student.religion || "—" },
+          ]}
+        />
+        <CardSection
+          title="👨‍👩‍👧 Parent Details"
+          items={[
+            { label: "Father", value: student.fatherName },
+            { label: "Mother", value: student.motherName },
+            { label: "Contact", value: student.contact },
+            { label: "Guardian", value: student.guardianName || "—" },
+          ]}
+        />
+        <CardSection
+          title="🏫 Previous School"
+          items={[
+            { label: "School", value: student.prevSchoolName || "—" },
+            { label: "Last Class", value: student.prevSchoolClass || "—" },
+            { label: "TC No.", value: student.prevSchoolTcNo || "—" },
+            {
+              label: "Leaving Date",
+              value: student.prevSchoolLeavingDate || "—",
+            },
+          ]}
+        />
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          marginTop: 24,
+          gap: 16,
+          borderTop: "2px solid #e5e7eb",
+          paddingTop: 12,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div style={{ height: 32 }} />
+          <div
+            style={{
+              borderTop: "1px solid #555",
+              paddingTop: 4,
+              fontSize: 10,
+              color: "#555",
+            }}
+          >
+            Parent Signature
+          </div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ height: 32 }} />
+          <div
+            style={{
+              borderTop: "1px solid #555",
+              paddingTop: 4,
+              fontSize: 10,
+              color: "#555",
+            }}
+          >
+            Date
+          </div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ height: 32 }} />
+          <div
+            style={{
+              borderTop: "1px solid #555",
+              paddingTop: 4,
+              fontSize: 10,
+              color: "#555",
+            }}
+          >
+            Principal
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderTemplate3 = () => (
+    <div
+      style={{
+        background: "#fff",
+        color: "#1a1a1a",
+        fontFamily: "Arial, sans-serif",
+        fontSize: 10,
+        padding: 20,
+        width: "100%",
+        maxWidth: 700,
+        border: "2px solid #1e3a5f",
+      }}
+    >
+      <div style={{ textAlign: "center", marginBottom: 10 }}>
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: 18,
+            color: "#1e3a5f",
+            textTransform: "uppercase",
+            letterSpacing: 1,
+          }}
+        >
+          {schoolName}
+        </div>
+        <div style={{ fontSize: 10, color: "#555" }}>{schoolAddress}</div>
+        <div
+          style={{
+            marginTop: 6,
+            fontWeight: 700,
+            fontSize: 13,
+            background: "#1e3a5f",
+            color: "#fff",
+            padding: "3px 0",
+            letterSpacing: 3,
+          }}
+        >
+          STUDENT ADMISSION FORM
+        </div>
+        <div style={{ fontSize: 9, color: "#888", marginTop: 2 }}>
+          Session: {new Date().getFullYear()}-{new Date().getFullYear() + 1}
+        </div>
+      </div>
+
+      {/* Full form table */}
+      <table
+        style={{ width: "100%", borderCollapse: "collapse", marginBottom: 8 }}
+      >
+        <tbody>
+          <DRow
+            label="Admission No."
+            value={student.admNo}
+            label2="Admission Date"
+            value2={student.admissionDate || ""}
+          />
+          <DRow
+            label="Full Name"
+            value={student.name}
+            label2="Roll No."
+            value2={student.rollNo}
+          />
+          <DRow
+            label="Class"
+            value={student.className}
+            label2="Section"
+            value2={student.section}
+          />
+          <DRow
+            label="Date of Birth"
+            value={student.dob}
+            label2="Gender"
+            value2={student.gender || ""}
+          />
+          <DRow
+            label="Blood Group"
+            value={student.bloodGroup || ""}
+            label2="Category"
+            value2={student.category || ""}
+          />
+          <DRow
+            label="Religion"
+            value={student.religion || ""}
+            label2="Nationality"
+            value2="Indian"
+          />
+          <DRow
+            label="Aadhaar No."
+            value={student.aadharNo || ""}
+            label2="SR No."
+            value2={student.srNo || ""}
+          />
+          <DRow
+            label="PEN No."
+            value={student.penNo || ""}
+            label2="APAAR No."
+            value2={student.apaarNo || ""}
+          />
+        </tbody>
+      </table>
+
+      <FullWidthSection title="PARENT / GUARDIAN INFORMATION">
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <tbody>
+            <DRow
+              label="Father's Name"
+              value={student.fatherName}
+              label2="Mobile"
+              value2={student.contact}
+            />
+            <DRow
+              label="Mother's Name"
+              value={student.motherName}
+              label2="Guardian Name"
+              value2={student.guardianName || ""}
+            />
+            <DRow
+              label="Guardian Phone"
+              value={student.guardianPhone || ""}
+              label2="Address"
+              value2={student.address || ""}
+            />
+          </tbody>
+        </table>
+      </FullWidthSection>
+
+      <FullWidthSection title="PREVIOUS SCHOOL DETAILS">
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <tbody>
+            <DRow
+              label="Previous School"
+              value={student.prevSchoolName || ""}
+              label2="Last Class"
+              value2={student.prevSchoolClass || ""}
+            />
+            <DRow
+              label="TC Number"
+              value={student.prevSchoolTcNo || ""}
+              label2="Leaving Date"
+              value2={student.prevSchoolLeavingDate || ""}
+            />
+          </tbody>
+        </table>
+      </FullWidthSection>
+
+      <FullWidthSection title="TRANSPORT / MISCELLANEOUS">
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <tbody>
+            <DRow
+              label="Route"
+              value={student.route || "N.A."}
+              label2="Sch. No."
+              value2={student.schNo || ""}
+            />
+            <DRow
+              label="Old Balance"
+              value={student.oldBalance ? `₹${student.oldBalance}` : "0"}
+              label2="Status"
+              value2={student.status}
+            />
+          </tbody>
+        </table>
+      </FullWidthSection>
+
+      <FullWidthSection title="DOCUMENTS CHECKLIST">
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 6,
+            padding: "4px 0",
+          }}
+        >
+          {[
+            "Birth Certificate",
+            "Aadhaar Card",
+            "TC Certificate",
+            "Report Card",
+            "Passport Photos (4)",
+            "Address Proof",
+            "Income Certificate",
+            "Caste Certificate",
+            "Medical Certificate",
+          ].map((doc) => (
+            <div
+              key={doc}
+              style={{ display: "flex", alignItems: "center", gap: 5 }}
+            >
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 11,
+                  height: 11,
+                  border: "1px solid #555",
+                }}
+              />
+              <span style={{ fontSize: 9 }}>{doc}</span>
+            </div>
+          ))}
+        </div>
+      </FullWidthSection>
+
+      <div
+        style={{
+          background: "#f0f4ff",
+          border: "1px solid #1e3a5f",
+          padding: "6px 10px",
+          marginBottom: 12,
+          borderRadius: 2,
+        }}
+      >
+        <div
+          style={{
+            fontWeight: 700,
+            fontSize: 10,
+            color: "#1e3a5f",
+            marginBottom: 4,
+          }}
+        >
+          FOR OFFICE USE ONLY
+        </div>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: 8,
+          }}
+        >
+          <div style={{ borderBottom: "1px dotted #555", paddingBottom: 4 }}>
+            Fee Category: ____________
+          </div>
+          <div style={{ borderBottom: "1px dotted #555", paddingBottom: 4 }}>
+            Verified By: ____________
+          </div>
+          <div style={{ borderBottom: "1px dotted #555", paddingBottom: 4 }}>
+            Entry No: ____________
+          </div>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          marginTop: 20,
+          gap: 16,
+        }}
+      >
+        <div style={{ textAlign: "center" }}>
+          <div style={{ height: 40 }} />
+          <div style={{ borderTop: "1px solid #333", paddingTop: 4 }}>
+            Parent / Guardian Signature
+          </div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ height: 40 }} />
+          <div style={{ borderTop: "1px solid #333", paddingTop: 4 }}>
+            Student Signature
+          </div>
+        </div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ height: 40 }} />
+          <div style={{ borderTop: "1px solid #333", paddingTop: 4 }}>
+            Principal / Registrar
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-gray-900/95"
+      style={{ overflowY: "auto" }}
+      data-ocid="admform.modal"
+    >
+      {/* Controls bar */}
+      <div
+        className="no-print sticky top-0 z-10 flex items-center gap-3 px-4 py-3 border-b border-gray-700"
+        style={{ background: "#1a1f2e" }}
+      >
+        <span className="text-white font-bold text-sm">
+          Admission Form Preview — {student.name}
+        </span>
+        <div className="flex gap-1 ml-4">
+          {([1, 2, 3] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTemplate(t)}
+              className={`px-3 py-1 rounded text-xs font-medium transition ${
+                template === t
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+              }`}
+              data-ocid={`admform.template.${t}`}
+            >
+              Template {t}{" "}
+              {t === 1 ? "(Classic)" : t === 2 ? "(Modern)" : "(Detailed)"}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex gap-2">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded font-semibold transition"
+            data-ocid="admform.print_button"
+          >
+            <Printer size={13} /> Print
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-white text-xs px-4 py-2 rounded font-medium transition"
+            data-ocid="admform.close_button"
+          >
+            <X size={13} /> Close
+          </button>
+        </div>
+      </div>
+
+      {/* Preview area */}
+      <div className="flex-1 overflow-auto px-6 py-6 flex justify-center">
+        <div
+          id="adm-form-print-area"
+          style={{
+            background: "#fff",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.5)",
+            borderRadius: 4,
+            minHeight: 800,
+          }}
+        >
+          {template === 1 && renderTemplate1()}
+          {template === 2 && renderTemplate2()}
+          {template === 3 && renderTemplate3()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Helper sub-components for Admission Form templates
+function SectionBlock({
+  title,
+  color,
+  children,
+}: {
+  title: string;
+  color: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div
+        style={{
+          background: color,
+          color: "#fff",
+          padding: "3px 8px",
+          fontWeight: 700,
+          fontSize: 10,
+          letterSpacing: 0.5,
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          border: "1px solid #aaa",
+          borderTop: "none",
+          padding: "4px 6px",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function FullWidthSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div
+        style={{
+          background: "#1e3a5f",
+          color: "#fff",
+          padding: "3px 8px",
+          fontWeight: 700,
+          fontSize: 10,
+          letterSpacing: 0.5,
+        }}
+      >
+        {title}
+      </div>
+      <div
+        style={{
+          border: "1px solid #aaa",
+          borderTop: "none",
+          padding: "4px 6px",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TwoColTable({ rows }: { rows: [string, string, string, string][] }) {
+  return (
+    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={`row-${row[0]}-${row[2]}`}>
+            <td
+              style={{
+                border: "1px solid #ccc",
+                padding: "3px 6px",
+                background: "#f0f4ff",
+                fontWeight: 600,
+                width: 100,
+              }}
+            >
+              {row[0]}
+            </td>
+            <td
+              style={{
+                border: "1px solid #ccc",
+                padding: "3px 6px",
+                width: 160,
+              }}
+            >
+              {row[1]}
+            </td>
+            <td
+              style={{
+                border: "1px solid #ccc",
+                padding: "3px 6px",
+                background: "#f0f4ff",
+                fontWeight: 600,
+                width: 100,
+              }}
+            >
+              {row[2]}
+            </td>
+            <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>
+              {row[3]}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function DRow({
+  label,
+  value,
+  label2,
+  value2,
+}: {
+  label: string;
+  value: string;
+  label2: string;
+  value2: string;
+}) {
+  return (
+    <tr>
+      <td
+        style={{
+          border: "1px solid #ccc",
+          padding: "3px 6px",
+          background: "#f0f4ff",
+          fontWeight: 600,
+          width: 120,
+        }}
+      >
+        {label}
+      </td>
+      <td style={{ border: "1px solid #ccc", padding: "3px 6px", width: 160 }}>
+        {value}
+      </td>
+      <td
+        style={{
+          border: "1px solid #ccc",
+          padding: "3px 6px",
+          background: "#f0f4ff",
+          fontWeight: 600,
+          width: 120,
+        }}
+      >
+        {label2}
+      </td>
+      <td style={{ border: "1px solid #ccc", padding: "3px 6px" }}>{value2}</td>
+    </tr>
+  );
+}
+
+function CardSection({
+  title,
+  items,
+}: {
+  title: string;
+  items: { label: string; value: string }[];
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: 6,
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          background: "#6366f1",
+          color: "#fff",
+          padding: "4px 8px",
+          fontWeight: 700,
+          fontSize: 10,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ padding: "6px 8px" }}>
+        {items.map((item) => (
+          <div
+            key={item.label}
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              padding: "2px 0",
+              borderBottom: "1px dotted #eee",
+            }}
+          >
+            <span style={{ color: "#6b7280", fontSize: 9 }}>{item.label}</span>
+            <span style={{ fontWeight: 600, fontSize: 10 }}>{item.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Student Detail Modal ─────────────────────────────────────────────────────
+function StudentDetailModal({
+  student,
+  onClose,
+  onEdit,
+  onDiscontinue,
+}: {
+  student: Student;
+  onClose: () => void;
+  onEdit: () => void;
+  onDiscontinue: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 pt-8 pb-8"
+      style={{ overflowY: "auto" }}
+      data-ocid="student.modal"
+    >
+      <div
+        className="relative w-full max-w-3xl rounded-xl shadow-2xl"
+        style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-6 py-4 rounded-t-xl"
+          style={{ background: "#0f172a", borderBottom: "1px solid #374151" }}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
+              style={{ background: "#1e3a5f" }}
+            >
+              {student.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-white font-bold text-base">{student.name}</h2>
+              <span className="text-blue-400 text-xs font-medium">
+                {student.admNo}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onEdit}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+              data-ocid="student.edit_button"
+            >
+              <Pencil size={12} /> Edit
+            </button>
+            {student.status !== "Discontinued" && (
+              <button
+                type="button"
+                onClick={onDiscontinue}
+                className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+                data-ocid="student.discontinue_button"
+              >
+                Discontinue
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-white p-1 rounded transition"
+              data-ocid="student.close_button"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 grid grid-cols-2 gap-4">
+          {/* Status badge */}
+          <div className="col-span-2">
+            <span
+              className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                student.status === "Active"
+                  ? "bg-green-900/50 text-green-400"
+                  : student.status === "Discontinued"
+                    ? "bg-red-900/50 text-red-400"
+                    : "bg-yellow-900/50 text-yellow-400"
+              }`}
+            >
+              {student.status}
+            </span>
+            {student.status === "Discontinued" && student.leavingDate && (
+              <span className="ml-3 text-gray-400 text-xs">
+                Left on: {student.leavingDate} | Reason:{" "}
+                {student.leavingReason || "—"}
+              </span>
+            )}
+          </div>
+
+          <DetailSection title="Academic Details">
+            <DetailRow label="Adm. No." value={student.admNo} />
+            <DetailRow label="Class" value={student.className} />
+            <DetailRow label="Section" value={student.section} />
+            <DetailRow label="Roll No." value={student.rollNo} />
+            <DetailRow
+              label="Admission Date"
+              value={student.admissionDate || "—"}
+            />
+            <DetailRow label="Sch. No." value={student.schNo || "—"} />
+            <DetailRow label="SR No." value={student.srNo || "—"} />
+            <DetailRow
+              label="Old Balance"
+              value={
+                student.oldBalance
+                  ? `₹${student.oldBalance.toLocaleString("en-IN")}`
+                  : "₹0"
+              }
+              valueColor={student.oldBalance > 0 ? "#f87171" : undefined}
+            />
+          </DetailSection>
+
+          <DetailSection title="Personal Details">
+            <DetailRow label="Date of Birth" value={student.dob || "—"} />
+            <DetailRow label="Gender" value={student.gender || "—"} />
+            <DetailRow label="Blood Group" value={student.bloodGroup || "—"} />
+            <DetailRow label="Category" value={student.category || "—"} />
+            <DetailRow label="Religion" value={student.religion || "—"} />
+            <DetailRow label="Aadhaar No." value={student.aadharNo || "—"} />
+            <DetailRow label="PEN No." value={student.penNo || "—"} />
+            <DetailRow label="APAAR No." value={student.apaarNo || "—"} />
+          </DetailSection>
+
+          <DetailSection title="Parent / Guardian">
+            <DetailRow label="Father Name" value={student.fatherName || "—"} />
+            <DetailRow label="Mother Name" value={student.motherName || "—"} />
+            <DetailRow label="Contact No." value={student.contact || "—"} />
+            <DetailRow
+              label="Guardian Name"
+              value={student.guardianName || "—"}
+            />
+            <DetailRow
+              label="Guardian Phone"
+              value={student.guardianPhone || "—"}
+            />
+          </DetailSection>
+
+          <DetailSection title="Transport &amp; Other">
+            <DetailRow label="Route" value={student.route || "N.A."} />
+            <DetailRow label="Address" value={student.address || "—"} />
+            <DetailRow
+              label="Prev. School"
+              value={student.prevSchoolName || "—"}
+            />
+            <DetailRow
+              label="Prev. Class"
+              value={student.prevSchoolClass || "—"}
+            />
+            <DetailRow label="TC No." value={student.prevSchoolTcNo || "—"} />
+          </DetailSection>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ border: "1px solid #374151" }}
+    >
+      <div
+        className="px-3 py-2 text-xs font-semibold text-blue-300 uppercase tracking-wider"
+        style={{ background: "#0f172a", borderBottom: "1px solid #374151" }}
+      >
+        {title}
+      </div>
+      <div className="px-3 py-2">{children}</div>
+    </div>
+  );
+}
+
+function DetailRow({
+  label,
+  value,
+  valueColor,
+}: {
+  label: string;
+  value: string;
+  valueColor?: string;
+}) {
+  return (
+    <div
+      className="flex items-center justify-between py-0.5"
+      style={{ borderBottom: "1px dotted #374151" }}
+    >
+      <span className="text-gray-400" style={{ fontSize: 10 }}>
+        {label}
+      </span>
+      <span
+        className="text-white font-medium"
+        style={{ fontSize: 10, color: valueColor }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─── Print List Modal ─────────────────────────────────────────────────────────
+function PrintListModal({
+  students,
+  selectedIds,
+  onClose,
+}: {
+  students: Student[];
+  selectedIds: Set<number>;
+  onClose: () => void;
+}) {
+  const [checkedCols, setCheckedCols] = useState<Set<string>>(
+    new Set(PRINT_COLUMNS.map((c) => c.key)),
+  );
+  const [scope, setScope] = useState<"all" | "selected">("all");
+
+  const displayStudents =
+    scope === "selected" && selectedIds.size > 0
+      ? students.filter((s) => selectedIds.has(s.id))
+      : students;
+
+  const activeCols = PRINT_COLUMNS.filter((c) => checkedCols.has(c.key));
+
+  const toggleCol = (key: string) => {
+    setCheckedCols((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handlePrint = () => {
+    const el = document.getElementById("student-list-print-area");
+    if (!el) return;
+    const win = window.open("", "_blank", "width=1100,height=700");
+    if (!win) return;
+    win.document.write(
+      `<html><head><title>Student List</title><style>@page{size:A4 landscape;margin:8mm}body{margin:0;font-family:Arial,sans-serif;font-size:9px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #ccc;padding:3px 5px}th{background:#c6d9f1;font-weight:700;color:#1e3a5f}.no-print{display:none}</style></head><body>${el.innerHTML}</body></html>`,
+    );
+    win.document.close();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 400);
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-start justify-center pt-6 pb-6"
+      style={{ overflowY: "auto" }}
+      data-ocid="printlist.modal"
+    >
+      <div
+        className="w-full max-w-5xl rounded-xl shadow-2xl"
+        style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+      >
+        {/* Header */}
+        <div
+          className="flex items-center justify-between px-5 py-3 rounded-t-xl"
+          style={{ background: "#0f172a", borderBottom: "1px solid #374151" }}
+        >
+          <span className="text-white font-bold text-sm">
+            Student Data Print List
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-2 rounded font-semibold transition"
+              data-ocid="printlist.print_button"
+            >
+              <Printer size={13} /> Print
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="text-gray-400 hover:text-white p-1"
+              data-ocid="printlist.close_button"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Controls (no-print) */}
+        <div
+          className="px-5 py-4 no-print"
+          style={{ borderBottom: "1px solid #374151" }}
+        >
+          {/* Scope */}
+          <div className="flex items-center gap-4 mb-3">
+            <span className="text-gray-400 text-xs font-medium">
+              Print Scope:
+            </span>
+            {(["all", "selected"] as const).map((s) => (
+              <label
+                key={s}
+                className="flex items-center gap-1.5 cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  checked={scope === s}
+                  onChange={() => setScope(s)}
+                  className="accent-blue-500"
+                  data-ocid={`printlist.scope.${s}`}
+                />
+                <span className="text-gray-300 text-xs">
+                  {s === "all"
+                    ? "All Students"
+                    : `Selected Only (${selectedIds.size})`}
+                </span>
+              </label>
+            ))}
+          </div>
+          {/* Column checkboxes */}
+          <div className="flex flex-wrap gap-3">
+            {PRINT_COLUMNS.map((col) => (
+              <label
+                key={col.key}
+                className="flex items-center gap-1.5 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={checkedCols.has(col.key)}
+                  onChange={() => toggleCol(col.key)}
+                  className="accent-blue-500 w-3 h-3"
+                  data-ocid="printlist.col.checkbox"
+                />
+                <span className="text-gray-300 text-xs">{col.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Preview table */}
+        <div
+          className="p-4 overflow-x-auto"
+          style={{ maxHeight: 480, overflowY: "auto" }}
+        >
+          <div id="student-list-print-area">
+            <div
+              style={{
+                textAlign: "center",
+                fontFamily: "Arial",
+                fontWeight: 700,
+                fontSize: 14,
+                color: "#1e3a5f",
+                marginBottom: 4,
+              }}
+            >
+              {(() => {
+                try {
+                  return (
+                    JSON.parse(
+                      localStorage.getItem("erp_school_profile") || "{}",
+                    ).name || "School Name"
+                  );
+                } catch {
+                  return "School Name";
+                }
+              })()}
+            </div>
+            <div
+              style={{
+                textAlign: "center",
+                fontFamily: "Arial",
+                fontWeight: 700,
+                fontSize: 11,
+                marginBottom: 8,
+                textDecoration: "underline",
+              }}
+            >
+              LIST OF STUDENTS
+            </div>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                fontSize: 9,
+                fontFamily: "Arial",
+              }}
+            >
+              <thead>
+                <tr style={{ background: "#c6d9f1" }}>
+                  <th
+                    style={{
+                      border: "1px solid #aaa",
+                      padding: "3px 5px",
+                      textAlign: "left",
+                    }}
+                  >
+                    #
+                  </th>
+                  {activeCols.map((col) => (
+                    <th
+                      key={col.key}
+                      style={{
+                        border: "1px solid #aaa",
+                        padding: "3px 5px",
+                        textAlign: "left",
+                        color: "#1e3a5f",
+                      }}
+                    >
+                      {col.label}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {displayStudents.map((s, i) => (
+                  <tr
+                    key={s.id}
+                    style={{ background: i % 2 === 0 ? "#fff" : "#e8f0fe" }}
+                  >
+                    <td
+                      style={{ border: "1px solid #ddd", padding: "2px 5px" }}
+                    >
+                      {i + 1}
+                    </td>
+                    {activeCols.map((col) => (
+                      <td
+                        key={col.key}
+                        style={{ border: "1px solid #ddd", padding: "2px 5px" }}
+                      >
+                        {col.key === "oldBalance"
+                          ? s.oldBalance > 0
+                            ? `₹${s.oldBalance.toLocaleString("en-IN")}`
+                            : "0"
+                          : String((s as any)[col.key] ?? "")}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Discontinue Modal ────────────────────────────────────────────────────────
+function DiscontinueModal({
+  student,
+  onConfirm,
+  onCancel,
+}: {
+  student: Student;
+  onConfirm: (data: {
+    leavingDate: string;
+    leavingReason: string;
+    leavingRemarks: string;
+  }) => void;
+  onCancel: () => void;
+}) {
+  const [leavingDate, setLeavingDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [leavingReason, setLeavingReason] = useState("TC Issued");
+  const [leavingRemarks, setLeavingRemarks] = useState("");
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center"
+      data-ocid="discontinue.modal"
+    >
+      <div
+        className="w-full max-w-md rounded-xl shadow-2xl p-6"
+        style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+      >
+        <h3 className="text-white font-bold text-base mb-1">
+          Mark as Discontinued
+        </h3>
+        <p className="text-gray-400 text-xs mb-4">
+          Student:{" "}
+          <span className="text-yellow-400 font-medium">{student.name}</span> (
+          {student.admNo})
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label
+              htmlFor="disc-leaving-date"
+              className="text-gray-400 text-xs block mb-1"
+            >
+              Leaving Date
+            </label>
+            <input
+              id="disc-leaving-date"
+              type="date"
+              value={leavingDate}
+              onChange={(e) => setLeavingDate(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500"
+              data-ocid="discontinue.date.input"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="disc-reason"
+              className="text-gray-400 text-xs block mb-1"
+            >
+              Reason
+            </label>
+            <select
+              id="disc-reason"
+              value={leavingReason}
+              onChange={(e) => setLeavingReason(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500"
+              data-ocid="discontinue.reason.select"
+            >
+              {LEAVING_REASONS.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label
+              htmlFor="disc-remarks"
+              className="text-gray-400 text-xs block mb-1"
+            >
+              Remarks
+            </label>
+            <textarea
+              id="disc-remarks"
+              value={leavingRemarks}
+              onChange={(e) => setLeavingRemarks(e.target.value)}
+              rows={2}
+              placeholder="Optional remarks..."
+              className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500 resize-none"
+              data-ocid="discontinue.remarks.textarea"
+            />
+          </div>
+        </div>
+        <div className="flex gap-3 mt-4">
+          <button
+            type="button"
+            onClick={() =>
+              onConfirm({ leavingDate, leavingReason, leavingRemarks })
+            }
+            className="flex-1 bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold py-2 rounded transition"
+            data-ocid="discontinue.confirm_button"
+          >
+            Confirm Discontinue
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-sm py-2 rounded transition"
+            data-ocid="discontinue.cancel_button"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Discontinued Students Panel ─────────────────────────────────────────────
+function DiscontinuedPanel({
+  students,
+  onReinstate,
+  onClose,
+}: {
+  students: Student[];
+  onReinstate: (id: number) => void;
+  onClose: () => void;
+}) {
+  const discontinued = students.filter((s) => s.status === "Discontinued");
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/80 flex items-start justify-center pt-8 pb-8"
+      style={{ overflowY: "auto" }}
+      data-ocid="discontinued.modal"
+    >
+      <div
+        className="w-full max-w-4xl rounded-xl shadow-2xl"
+        style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+      >
+        <div
+          className="flex items-center justify-between px-5 py-3 rounded-t-xl"
+          style={{ background: "#0f172a", borderBottom: "1px solid #374151" }}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-sm">
+              Discontinued Students
+            </span>
+            <span className="bg-red-900/50 text-red-400 text-xs px-2 py-0.5 rounded-full">
+              {discontinued.length} students
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+            data-ocid="discontinued.close_button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="p-4 overflow-x-auto">
+          {discontinued.length === 0 ? (
+            <div
+              className="text-center py-12 text-gray-500"
+              data-ocid="discontinued.empty_state"
+            >
+              No discontinued students found.
+            </div>
+          ) : (
+            <table
+              className="w-full text-xs"
+              style={{ borderCollapse: "collapse" }}
+              data-ocid="discontinued.table"
+            >
+              <thead>
+                <tr style={{ background: "#0f172a" }}>
+                  {[
+                    "#",
+                    "Adm No",
+                    "Name",
+                    "Class",
+                    "Leaving Date",
+                    "Reason",
+                    "Remarks",
+                    "Action",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-3 py-2 text-gray-400 font-medium"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {discontinued.map((s, i) => (
+                  <tr
+                    key={s.id}
+                    style={{
+                      background: i % 2 === 0 ? "#111827" : "#0f1117",
+                      borderBottom: "1px solid #374151",
+                    }}
+                    data-ocid={`discontinued.item.${i + 1}`}
+                  >
+                    <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                    <td className="px-3 py-2 text-blue-400">{s.admNo}</td>
+                    <td className="px-3 py-2 text-white">{s.name}</td>
+                    <td className="px-3 py-2 text-gray-300">{s.className}</td>
+                    <td className="px-3 py-2 text-orange-300">
+                      {s.leavingDate || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-red-300">
+                      {s.leavingReason || "—"}
+                    </td>
+                    <td className="px-3 py-2 text-gray-400 max-w-32 truncate">
+                      {s.leavingRemarks || "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => onReinstate(s.id)}
+                        className="bg-green-700 hover:bg-green-600 text-white text-xs px-2.5 py-1 rounded transition"
+                        data-ocid="discontinued.reinstate_button"
+                      >
+                        Reinstate
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function Students() {
   const [students, setStudents] = useState<Student[]>([]);
   const [showAdmissionForm, setShowAdmissionForm] = useState(false);
+  const [editStudent, setEditStudent] = useState<Student | null>(null);
   const [selectedRows, setSelectedRows] = useState<Set<number>>(new Set());
   const [highlightedRow, setHighlightedRow] = useState<number | null>(null);
   const [fastSearch, setFastSearch] = useState(false);
   const [showBirthdays, setShowBirthdays] = useState(false);
+  const importRef = useRef<HTMLInputElement>(null);
+
+  // Modal states
+  const [detailStudent, setDetailStudent] = useState<Student | null>(null);
+  const [admFormStudent, setAdmFormStudent] = useState<Student | null>(null);
+  const [showPrintList, setShowPrintList] = useState(false);
+  const [discontinueTarget, setDiscontinueTarget] = useState<Student | null>(
+    null,
+  );
+  const [showDiscontinued, setShowDiscontinued] = useState(false);
+  const [showDiscontinuedList, setShowDiscontinuedList] = useState(false);
 
   // Filter state
   const [filterField1, setFilterField1] = useState("Admission No.");
@@ -83,16 +2009,6 @@ export function Students() {
   const [filterField3, setFilterField3] = useState("Father Name");
   const [filterVal3, setFilterVal3] = useState("");
   const [birthMonth, setBirthMonth] = useState("");
-  const [activeFilters, setActiveFilters] = useState({
-    f1: "",
-    v1: "",
-    f2: "",
-    v2: "",
-    f3: "",
-    v3: "",
-    month: "",
-    birthdays: false,
-  });
 
   // Sort state
   const [sort1Field, setSort1Field] = useState("admNo");
@@ -102,44 +2018,53 @@ export function Students() {
   const [sort3Field, setSort3Field] = useState("fatherName");
   const [sort3Desc, setSort3Desc] = useState(false);
 
+  // Double-click timer ref for distinguishing single vs double click
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    try {
+      const data = JSON.parse(localStorage.getItem("erp_students") || "[]");
+      if (Array.isArray(data)) setStudents(data);
+    } catch {
+      setStudents([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (students.length > 0) {
+      localStorage.setItem("erp_students", JSON.stringify(students));
+    }
+  }, [students]);
+
   const nextId =
     students.length > 0 ? Math.max(...students.map((s) => s.id)) + 1 : 1;
 
-  const applySearch = () => {
-    setActiveFilters({
-      f1: filterField1,
-      v1: filterVal1.toLowerCase(),
-      f2: filterField2,
-      v2: filterVal2.toLowerCase(),
-      f3: filterField3,
-      v3: filterVal3.toLowerCase(),
-      month: birthMonth,
-      birthdays: showBirthdays,
-    });
-  };
-
   const filtered = useMemo(() => {
     let list = [...students];
-    if (activeFilters.v1)
+    // Hide discontinued by default unless showDiscontinued is on
+    if (!showDiscontinued) {
+      list = list.filter((s) => s.status !== "Discontinued");
+    }
+    if (filterVal1.trim())
       list = list.filter((s) =>
-        getFieldValue(s, activeFilters.f1).includes(activeFilters.v1),
+        getFieldValue(s, filterField1).includes(filterVal1.toLowerCase()),
       );
-    if (activeFilters.v2)
+    if (filterVal2.trim())
       list = list.filter((s) =>
-        getFieldValue(s, activeFilters.f2).includes(activeFilters.v2),
+        getFieldValue(s, filterField2).includes(filterVal2.toLowerCase()),
       );
-    if (activeFilters.v3)
+    if (filterVal3.trim())
       list = list.filter((s) =>
-        getFieldValue(s, activeFilters.f3).includes(activeFilters.v3),
+        getFieldValue(s, filterField3).includes(filterVal3.toLowerCase()),
       );
-    if (activeFilters.month) {
-      const mi = MONTHS.indexOf(activeFilters.month);
+    if (birthMonth) {
+      const mi = MONTHS.indexOf(birthMonth);
       list = list.filter((s) => {
         const parts = s.dob.split("-");
         return parts.length === 3 && Number(parts[1]) - 1 === mi;
       });
     }
-    if (activeFilters.birthdays) {
+    if (showBirthdays) {
       const curMonth = new Date().getMonth();
       list = list.filter((s) => {
         const parts = s.dob.split("-");
@@ -147,7 +2072,18 @@ export function Students() {
       });
     }
     return list;
-  }, [students, activeFilters]);
+  }, [
+    students,
+    filterVal1,
+    filterField1,
+    filterVal2,
+    filterField2,
+    filterVal3,
+    filterField3,
+    birthMonth,
+    showBirthdays,
+    showDiscontinued,
+  ]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -173,6 +2109,12 @@ export function Students() {
     sort3Desc,
   ]);
 
+  const getSelectedStudent = (): Student | null => {
+    if (selectedRows.size === 0) return null;
+    const firstId = Array.from(selectedRows)[0];
+    return students.find((s) => s.id === firstId) || null;
+  };
+
   const handleSelectAll = (checked: boolean) => {
     if (checked) setSelectedRows(new Set(sorted.map((s) => s.id)));
     else setSelectedRows(new Set());
@@ -187,25 +2129,31 @@ export function Students() {
     });
   };
 
+  const handleRowClick = (s: Student) => {
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      // Double click — open detail modal
+      setDetailStudent(s);
+    } else {
+      clickTimerRef.current = setTimeout(() => {
+        clickTimerRef.current = null;
+        // Single click — highlight
+        setHighlightedRow((prev) => (prev === s.id ? null : s.id));
+      }, 250);
+    }
+  };
+
   const handleExport = () => {
-    const headers = [
-      "Adm No",
-      "Name",
-      "Father",
-      "Mother",
-      "Class",
-      "Section",
-      "Roll No",
-      "DOB",
-      "Contact",
-      "Route",
-      "Sch No",
-      "Old Balance",
-    ];
     const rows = sorted.map((s) =>
       [
         s.admNo,
         s.name,
+        s.admissionDate ?? "",
+        s.aadharNo ?? "",
+        s.srNo ?? "",
+        s.penNo ?? "",
+        s.apaarNo ?? "",
         s.fatherName,
         s.motherName,
         s.className,
@@ -216,9 +2164,14 @@ export function Students() {
         s.route,
         s.schNo,
         s.oldBalance,
+        s.category ?? "",
+        s.prevSchoolName ?? "",
+        s.prevSchoolTcNo ?? "",
+        s.prevSchoolLeavingDate ?? "",
+        s.prevSchoolClass ?? "",
       ].join(","),
     );
-    const csv = [headers.join(","), ...rows].join("\n");
+    const csv = [CSV_HEADERS.join(","), ...rows].join("\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     a.download = "students.csv";
@@ -226,33 +2179,192 @@ export function Students() {
     toast.success("Students exported to CSV");
   };
 
-  const handleAdmissionSave = (data: any) => {
-    const newStudent: Student = {
-      id: nextId,
-      admNo: data.admNo || `ADM${String(nextId).padStart(4, "0")}`,
-      name: data.name || "",
-      fatherName: data.fatherName || "",
-      motherName: data.motherName || "",
-      className: data.className || "",
-      section: data.section || "",
-      rollNo: data.rollNo || "",
-      dob: data.dob || "",
-      contact: data.contact || "",
-      route: data.route || "N.A.",
-      schNo: data.schNo || "",
-      oldBalance: data.oldBalance || 0,
-      status: "Active",
+  const handleDownloadTemplate = () => {
+    const csv = `${CSV_HEADERS.join(",")}\n`;
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = "students_template.csv";
+    a.click();
+    toast.success("Template downloaded");
+  };
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      const parsed = parseCSV(text);
+      if (parsed.length === 0) {
+        toast.error("No valid rows found in CSV");
+        return;
+      }
+      setStudents((prev) => [...prev, ...parsed]);
+      toast.success(`${parsed.length} student(s) imported`);
     };
-    setStudents((prev) => [...prev, newStudent]);
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleAdmissionSave = (data: any) => {
+    if (editStudent) {
+      setStudents((prev) =>
+        prev.map((s) =>
+          s.id === editStudent.id
+            ? {
+                ...s,
+                admNo: data.admNo || s.admNo,
+                name: data.name || s.name,
+                fatherName: data.fatherName || s.fatherName,
+                motherName: data.motherName || s.motherName,
+                className: data.className || s.className,
+                section: data.section || s.section,
+                rollNo: data.rollNo || s.rollNo,
+                dob: data.dob || s.dob,
+                contact: data.contact || s.contact,
+                route: data.route || s.route,
+                schNo: data.schNo || s.schNo,
+                oldBalance: data.oldBalance ?? s.oldBalance,
+                category: data.category || s.category,
+                admissionDate: data.admissionDate || s.admissionDate,
+                aadharNo: data.aadharNo || s.aadharNo,
+                srNo: data.srNo || s.srNo,
+                penNo: data.penNo || s.penNo,
+                apaarNo: data.apaarNo || s.apaarNo,
+                prevSchoolName: data.prevSchoolName || s.prevSchoolName,
+                prevSchoolTcNo: data.prevSchoolTcNo || s.prevSchoolTcNo,
+                prevSchoolLeavingDate:
+                  data.prevSchoolLeavingDate || s.prevSchoolLeavingDate,
+                prevSchoolClass: data.prevSchoolClass || s.prevSchoolClass,
+              }
+            : s,
+        ),
+      );
+      toast.success("Student record updated!");
+    } else {
+      const newStudent: Student = {
+        id: nextId,
+        admNo: data.admNo || `ADM${String(nextId).padStart(4, "0")}`,
+        name: data.name || "",
+        fatherName: data.fatherName || "",
+        motherName: data.motherName || "",
+        className: data.className || "",
+        section: data.section || "",
+        rollNo: data.rollNo || "",
+        dob: data.dob || "",
+        contact: data.contact || "",
+        route: data.route || "N.A.",
+        schNo: data.schNo || "",
+        oldBalance: data.oldBalance || 0,
+        status: "Active",
+        category: data.category || "General",
+        admissionDate: data.admissionDate || "",
+        aadharNo: data.aadharNo || "",
+        srNo: data.srNo || "",
+        penNo: data.penNo || "",
+        apaarNo: data.apaarNo || "",
+        prevSchoolName: data.prevSchoolName || "",
+        prevSchoolTcNo: data.prevSchoolTcNo || "",
+        prevSchoolLeavingDate: data.prevSchoolLeavingDate || "",
+        prevSchoolClass: data.prevSchoolClass || "",
+      };
+      setStudents((prev) => [...prev, newStudent]);
+      toast.success("Student admitted successfully!");
+    }
+    setEditStudent(null);
     setShowAdmissionForm(false);
-    toast.success("Student admitted successfully!");
+  };
+
+  const handleAdmForm = () => {
+    const sel = getSelectedStudent();
+    if (!sel) {
+      toast.error("Please select a student first");
+      return;
+    }
+    setAdmFormStudent(sel);
+  };
+
+  const handleList = () => {
+    const sel = getSelectedStudent();
+    if (!sel && selectedRows.size === 0) {
+      setShowPrintList(true);
+      return;
+    }
+    setShowPrintList(true);
+  };
+
+  const handleIDCard = () => {
+    const sel = getSelectedStudent();
+    if (!sel) {
+      toast.error("Please select a student first");
+      return;
+    }
+    localStorage.setItem("cert_selected_student", JSON.stringify(sel));
+    toast.success(`Opening ID Card for ${sel.name}`);
+    window.location.hash = "#/certificate";
+  };
+
+  const handleAdmitCard = () => {
+    const sel = getSelectedStudent();
+    if (!sel) {
+      toast.error("Please select a student first");
+      return;
+    }
+    localStorage.setItem("admit_selected_student", JSON.stringify(sel));
+    toast.success(`Opening Admit Card for ${sel.name}`);
+    window.location.hash = "#/examinations";
+  };
+
+  const handleDiscontinueConfirm = (data: {
+    leavingDate: string;
+    leavingReason: string;
+    leavingRemarks: string;
+  }) => {
+    if (!discontinueTarget) return;
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.id === discontinueTarget.id
+          ? {
+              ...s,
+              status: "Discontinued",
+              leavingDate: data.leavingDate,
+              leavingReason: data.leavingReason,
+              leavingRemarks: data.leavingRemarks,
+            }
+          : s,
+      ),
+    );
+    setDiscontinueTarget(null);
+    setDetailStudent(null);
+    toast.success(`${discontinueTarget.name} marked as Discontinued`);
+  };
+
+  const handleReinstate = (id: number) => {
+    setStudents((prev) =>
+      prev.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              status: "Active",
+              leavingDate: undefined,
+              leavingReason: undefined,
+              leavingRemarks: undefined,
+            }
+          : s,
+      ),
+    );
+    toast.success("Student reinstated to Active");
   };
 
   if (showAdmissionForm) {
     return (
       <StudentAdmissionForm
-        onCancel={() => setShowAdmissionForm(false)}
+        onCancel={() => {
+          setShowAdmissionForm(false);
+          setEditStudent(null);
+        }}
         onSave={handleAdmissionSave}
+        initialData={editStudent}
       />
     );
   }
@@ -262,6 +2374,53 @@ export function Students() {
 
   return (
     <div className="text-xs" style={{ fontFamily: "Arial, sans-serif" }}>
+      {/* Modals */}
+      {detailStudent && (
+        <StudentDetailModal
+          student={detailStudent}
+          onClose={() => setDetailStudent(null)}
+          onEdit={() => {
+            setEditStudent(detailStudent);
+            setDetailStudent(null);
+            setShowAdmissionForm(true);
+          }}
+          onDiscontinue={() => {
+            setDiscontinueTarget(detailStudent);
+          }}
+        />
+      )}
+
+      {admFormStudent && (
+        <AdmissionFormPreview
+          student={admFormStudent}
+          onClose={() => setAdmFormStudent(null)}
+        />
+      )}
+
+      {showPrintList && (
+        <PrintListModal
+          students={sorted}
+          selectedIds={selectedRows}
+          onClose={() => setShowPrintList(false)}
+        />
+      )}
+
+      {discontinueTarget && (
+        <DiscontinueModal
+          student={discontinueTarget}
+          onConfirm={handleDiscontinueConfirm}
+          onCancel={() => setDiscontinueTarget(null)}
+        />
+      )}
+
+      {showDiscontinuedList && (
+        <DiscontinuedPanel
+          students={students}
+          onReinstate={handleReinstate}
+          onClose={() => setShowDiscontinuedList(false)}
+        />
+      )}
+
       {/* Title Bar */}
       <div
         style={{ background: "#1e3a5f" }}
@@ -282,13 +2441,21 @@ export function Students() {
         </label>
         <button
           type="button"
-          className="text-red-300 underline hover:text-red-200 ml-2"
-          onClick={() =>
-            toast.info("Discontinued students feature coming soon")
-          }
+          className="text-red-300 underline hover:text-red-200 ml-2 text-xs"
+          onClick={() => setShowDiscontinuedList(true)}
+          data-ocid="students.discontinued_link"
         >
           List of Discontinued Students
         </button>
+        <label className="flex items-center gap-1 text-yellow-300 cursor-pointer ml-2">
+          <input
+            type="checkbox"
+            checked={showDiscontinued}
+            onChange={(e) => setShowDiscontinued(e.target.checked)}
+            className="w-3 h-3"
+          />
+          Show Discontinued
+        </label>
         {/* Page nav */}
         <div className="flex items-center gap-1 text-white ml-2">
           <span>Page No:</span>
@@ -317,7 +2484,10 @@ export function Students() {
               label="New"
               color="red"
               icon={<UserPlus size={11} />}
-              onClick={() => setShowAdmissionForm(true)}
+              onClick={() => {
+                setEditStudent(null);
+                setShowAdmissionForm(true);
+              }}
               ocid="students.primary_button"
             />
             <Btn
@@ -326,10 +2496,6 @@ export function Students() {
               icon={<Calendar size={11} />}
               onClick={() => {
                 setShowBirthdays((prev) => !prev);
-                setActiveFilters((prev) => ({
-                  ...prev,
-                  birthdays: !showBirthdays,
-                }));
               }}
               ocid="students.toggle"
             />
@@ -337,36 +2503,20 @@ export function Students() {
               label="Adm. Form"
               color="green"
               icon={<FileText size={11} />}
-              onClick={() => toast.info("Coming soon")}
+              onClick={handleAdmForm}
               ocid="students.secondary_button"
             />
             <Btn
               label="ID Card"
               color="green"
               icon={<Printer size={11} />}
-              onClick={() => toast.info("Coming soon")}
+              onClick={handleIDCard}
               ocid="students.button"
             />
             <Btn
               label="List"
               color="green"
-              onClick={() => {
-                setFilterVal1("");
-                setFilterVal2("");
-                setFilterVal3("");
-                setBirthMonth("");
-                setShowBirthdays(false);
-                setActiveFilters({
-                  f1: filterField1,
-                  v1: "",
-                  f2: filterField2,
-                  v2: "",
-                  f3: filterField3,
-                  v3: "",
-                  month: "",
-                  birthdays: false,
-                });
-              }}
+              onClick={handleList}
               ocid="students.button"
             />
             <Btn
@@ -379,16 +2529,7 @@ export function Students() {
                 setFilterVal3("");
                 setBirthMonth("");
                 setShowBirthdays(false);
-                setActiveFilters({
-                  f1: "",
-                  v1: "",
-                  f2: "",
-                  v2: "",
-                  f3: "",
-                  v3: "",
-                  month: "",
-                  birthdays: false,
-                });
+                setSelectedRows(new Set());
               }}
               ocid="students.cancel_button"
             />
@@ -397,7 +2538,7 @@ export function Students() {
             <Btn
               label="Admit Card"
               color="green"
-              onClick={() => toast.info("Coming soon")}
+              onClick={handleAdmitCard}
               ocid="students.button"
             />
             <Btn
@@ -415,11 +2556,25 @@ export function Students() {
               ocid="students.button"
             />
             <Btn
+              label="Template"
+              color="olive"
+              icon={<Download size={11} />}
+              onClick={handleDownloadTemplate}
+              ocid="students.button"
+            />
+            <Btn
               label="Import"
               color="green"
               icon={<Upload size={11} />}
-              onClick={() => toast.info("Coming soon")}
+              onClick={() => importRef.current?.click()}
               ocid="students.upload_button"
+            />
+            <input
+              ref={importRef}
+              type="file"
+              accept=".csv"
+              className="hidden"
+              onChange={handleImportFile}
             />
           </div>
         </div>
@@ -443,7 +2598,6 @@ export function Students() {
         <input
           value={filterVal1}
           onChange={(e) => setFilterVal1(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && applySearch()}
           className="border border-gray-300 rounded px-2 py-1 text-xs bg-white w-28"
           placeholder="Search..."
           data-ocid="students.search_input"
@@ -462,7 +2616,6 @@ export function Students() {
         <input
           value={filterVal2}
           onChange={(e) => setFilterVal2(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && applySearch()}
           className="border border-gray-300 rounded px-2 py-1 text-xs bg-white w-28"
           placeholder="Search..."
           data-ocid="students.input"
@@ -481,7 +2634,6 @@ export function Students() {
         <input
           value={filterVal3}
           onChange={(e) => setFilterVal3(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && applySearch()}
           className="border border-gray-300 rounded px-2 py-1 text-xs bg-white w-28"
           placeholder="Search..."
           data-ocid="students.input"
@@ -498,15 +2650,6 @@ export function Students() {
             <option key={m}>{m}</option>
           ))}
         </select>
-        <button
-          type="button"
-          onClick={applySearch}
-          style={{ background: "#dc2626" }}
-          className="text-white px-3 py-1 rounded font-semibold hover:opacity-90"
-          data-ocid="students.submit_button"
-        >
-          Search
-        </button>
         <span className="text-gray-500 ml-auto">
           Results: {sorted.length} &nbsp;|&nbsp; Showing: 1 - {sorted.length}
         </span>
@@ -528,6 +2671,14 @@ export function Students() {
             />
             <span className="text-gray-600">Select All</span>
           </label>
+          {selectedRows.size > 0 && (
+            <span
+              className="text-blue-600 font-medium"
+              style={{ fontSize: 11 }}
+            >
+              {selectedRows.size} selected
+            </span>
+          )}
         </div>
         <table
           className="w-full"
@@ -556,6 +2707,7 @@ export function Students() {
                 "Route",
                 "Sch. No.",
                 "Old Bal",
+                "Edit",
               ].map((h) => (
                 <th
                   key={h}
@@ -571,7 +2723,7 @@ export function Students() {
             {sorted.length === 0 ? (
               <tr>
                 <td
-                  colSpan={14}
+                  colSpan={15}
                   className="text-center py-10 text-gray-400"
                   data-ocid="students.empty_state"
                 >
@@ -588,20 +2740,20 @@ export function Students() {
                     background:
                       highlightedRow === s.id
                         ? "#fff3cd"
-                        : i % 2 === 0
-                          ? "#ffffff"
-                          : "#e8f0fe",
+                        : selectedRows.has(s.id)
+                          ? "#e0f0ff"
+                          : s.status === "Discontinued"
+                            ? "#fef2f2"
+                            : i % 2 === 0
+                              ? "#ffffff"
+                              : "#e8f0fe",
                     cursor: "pointer",
                     borderBottom: "1px solid #e5e7eb",
+                    opacity: s.status === "Discontinued" ? 0.7 : 1,
                   }}
-                  onClick={() =>
-                    setHighlightedRow((prev) => (prev === s.id ? null : s.id))
-                  }
+                  onClick={() => handleRowClick(s)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ")
-                      setHighlightedRow((prev) =>
-                        prev === s.id ? null : s.id,
-                      );
+                    if (e.key === "Enter") handleRowClick(s);
                   }}
                   tabIndex={0}
                   data-ocid={`students.item.${i + 1}`}
@@ -627,10 +2779,22 @@ export function Students() {
                     style={{ color: "#1d4ed8" }}
                   >
                     {s.admNo}
+                    {s.status === "Discontinued" && (
+                      <span
+                        className="ml-1 text-red-500"
+                        style={{ fontSize: 9, textDecoration: "none" }}
+                      >
+                        [D]
+                      </span>
+                    )}
                   </td>
                   <td
                     className="px-2 py-1 font-medium"
-                    style={{ color: "#111827" }}
+                    style={{
+                      color: "#111827",
+                      textDecoration:
+                        s.status === "Discontinued" ? "line-through" : "none",
+                    }}
                   >
                     {s.name}
                   </td>
@@ -666,11 +2830,31 @@ export function Students() {
                   </td>
                   <td
                     className="px-2 py-1 text-right"
-                    style={{ color: s.oldBalance > 0 ? "#dc2626" : "#374151" }}
+                    style={{
+                      color: s.oldBalance > 0 ? "#dc2626" : "#374151",
+                    }}
                   >
                     {s.oldBalance > 0
                       ? `₹${s.oldBalance.toLocaleString("en-IN")}`
                       : "0"}
+                  </td>
+                  <td
+                    className="px-2 py-1"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      title="Edit student"
+                      onClick={() => {
+                        setEditStudent(s);
+                        setShowAdmissionForm(true);
+                      }}
+                      className="text-blue-500 hover:text-blue-400 p-0.5 rounded hover:bg-blue-900/30 transition"
+                      data-ocid={`students.edit_button.${i + 1}`}
+                    >
+                      <Pencil size={11} />
+                    </button>
                   </td>
                 </tr>
               ))
@@ -713,7 +2897,8 @@ export function Students() {
         />
         <div className="ml-auto">
           <span style={{ color: "#1e3a5f", fontWeight: "bold" }}>
-            No. of Student: {students.length}
+            No. of Student:{" "}
+            {students.filter((s) => s.status !== "Discontinued").length}
           </span>
         </div>
       </div>
@@ -721,7 +2906,7 @@ export function Students() {
   );
 }
 
-// -- Helper Components --
+// ─── Helper Components ──────────────────────────────────────────────────────
 
 interface BtnProps {
   label: string;
