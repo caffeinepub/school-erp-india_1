@@ -1,50 +1,46 @@
 # School ERP India
 
 ## Current State
-The Examinations page (`/home/ubuntu/workspace/.old/src/frontend/src/pages/Examinations.tsx`) has 4 tabs: Timetable Maker, Exam Schedule, Results, Print Marksheet.
-
-The current Timetable Maker tab is manual-entry only:
-- User creates exam groups (e.g. "Half Yearly 2025-26")
-- Then adds individual entries one-by-one: date, time, subject, class, section, max marks, min marks, venue
-- A filter grid shows entries grouped by exam group and class
-- Print button generates a basic HTML timetable sheet
-
-Subjects are stored in `localStorage` under key `erp_subjects` as an array of `{ id, name, class, code, ... }` (set in Academics module). Subjects can be filtered per class.
-
-Classes are stored in `localStorage` under key `erp_classes`.
+The Exam Timetable Maker in `src/frontend/src/pages/Examinations.tsx` has:
+- Auto-generate wizard (exam name, date range, times, marks, classes, subjects per class)
+- Generates per-class timetable cards with drag-and-drop row reordering and up/down arrows
+- Currently drag moves entire rows (both date and subject move together)
+- Generate button immediately saves to global timetable on each click
+- ClassTimetableCard component handles drag-drop internally
+- No Excel-style combined view across all classes
+- No explicit Save button to finalize the generated arrangement
 
 ## Requested Changes (Diff)
 
 ### Add
-- **Auto-generate timetable wizard** as the primary UX in the Timetable Maker tab. A structured entry form with:
-  - Exam Name (text)
-  - Exam Start Date (date picker)
-  - Exam End Date (date picker)
-  - Daily Time From / Time To (time pickers)
-  - Classes participating (multi-select checkboxes from CLASS_LIST)
-  - Subjects selection: for each selected class, suggest subjects from `erp_subjects` localStorage (filtered by class); user can check/uncheck or manually type to add custom subjects. Also allow a shared subject list if user doesn't want per-class subjects.
-  - Max Marks and Min Marks (defaults 100 / 33, user can change per subject or globally)
-  - "Generate Timetable" button
-- **Auto-distribution engine**: on Generate, the system distributes subjects across the available dates (skipping Sundays). If subjects > available days, wrap or flag overflow. Each date gets one subject. If multiple classes selected, each class gets its own copy of the timetable on the same dates (same subject per date across classes, or per-class subjects if specified per class).
-- **Generated timetable view**: after generation, show a beautiful grid/card timetable grouped by class. Each class has its own timetable panel showing: Date | Day | Subject | Time | Max Marks | Min Marks.
-- **Drag-and-drop reordering**: each timetable row is draggable (using HTML5 drag-and-drop or a simple DnD approach). Users can drag rows up/down to swap subject order within a class timetable. Also provide up/down arrow buttons as alternative.
-- **Per-class print**: a "Print" button per class timetable generates a printable sheet for that class only (school name from `erp_school_profile` localStorage, exam name, class, full table with date/day/subject/time/marks, principal/class teacher signature lines).
-- **Save generated timetable**: persist generated timetable to `erp_exam_timetable` localStorage in the existing format so the Exam Schedule tab also reflects it.
+- **Subject-only drag**: When dragging rows in ClassTimetableCard, only the subject (and its marks/time if applicable) moves to the new position. Dates and Days remain locked in their original order (row 1 = date 1, row 2 = date 2, etc.). The subject column is what gets reordered.
+- **Save button** on the generated timetable section: After user is happy with arrangement (after one or more Generate clicks), pressing Save commits the arrangement to localStorage permanently for that exam. Until Save is pressed, generating again reshuffles freely.
+- **Generate regenerates freely**: Each click of Generate button re-distributes subjects across dates with a smart rotation (no same subject on consecutive dates if possible). The arrangement is NOT saved until Save is clicked.
+- **Excel-style combined timetable view**: A new section/tab or panel below the generated per-class cards showing all classes in one table:
+  - Row 0 (header): "Date" | "Day" | Class1 | Class2 | Class3 ... (one column per participating class)
+  - Each subsequent row: date | day name | subject for Class1 on that date | subject for Class2 | ...
+  - If a class has no exam on a date, show "-"
+  - This combined view is printable (print button) and exportable as CSV
+- **Saved timetables list**: After saving, show a list of saved exam timetables with option to view/reopen for editing, or delete.
 
 ### Modify
-- The existing manual add-entry form in Timetable Maker should remain accessible but moved to a collapsible "Advanced / Manual Entry" section below the auto-generate wizard, so power users can still add individual rows.
-- Print Timetable button at top level should print all classes combined.
+- **ClassTimetableCard drag behavior**: Change drag-drop so only subjects swap between rows, not entire row data. Dates stay fixed per row index. Up/down arrows also only move the subject to adjacent row.
+- **Generate button**: Should NOT immediately merge into global timetable. Only preview is shown until Save is clicked.
+- **Save confirmation**: Show a small success toast/notification after saving.
 
 ### Remove
-- Nothing removed. Existing tabs (Exam Schedule, Results, Print Marksheet) are unchanged.
+- Nothing to remove.
 
 ## Implementation Plan
-1. Add `ExamWizard` state block: `wizardExamName`, `wizardStartDate`, `wizardEndDate`, `wizardTimeFrom`, `wizardTimeTo`, `wizardClasses` (array), `wizardSubjectsByClass` (map class→subject[]), `wizardMaxMarks`, `wizardMinMarks`.
-2. Build the wizard form UI as a card at the top of the timetable tab.
-3. Implement `generateTimetable()` function: enumerate dates from start to end (skip Sundays), zip with subjects array per class, produce `ExamTimetableEntry[]` objects.
-4. Store generated entries in `generatedTimetable` state (separate from manual `timetableEntries` or merged into it).
-5. Render per-class timetable cards below the wizard. Each row is draggable. Implement drag-and-drop swap logic using `onDragStart`, `onDragOver`, `onDrop` handlers (no external library needed).
-6. Add up/down arrow buttons on each row as alternative to DnD.
-7. Add per-class Print button that opens a styled print window.
-8. Persist final timetable to `erp_exam_timetable` localStorage.
-9. Keep existing manual entry form in a collapsible section.
+1. Modify `ClassTimetableCard` so drag-and-drop and up/down arrows only reorder the subject field (and marks if needed), keeping dates pinned to row positions.
+2. Change `handleGenerateTimetable` to only update `generatedByClass` state (preview), NOT merge into global `timetableEntries`.
+3. Add a "Save Timetable" button in the generated timetables section. On click, merge generated into global timetableEntries and show success toast.
+4. Add smart subject distribution in generate: shuffle subjects differently each Generate press (use random shuffle), with attempt to avoid same subject on consecutive days across classes.
+5. Build `CombinedTimetableView` component:
+   - Takes `generatedByClass` and `wizardClasses` as props
+   - Builds a unified date list (union of all dates)
+   - Renders HTML table: Date | Day | Class1 | Class2 | ...
+   - Print button opens window with styled printable table
+   - Export CSV button generates CSV with same structure
+6. Show combined view below the per-class cards when at least one class timetable is generated.
+7. Add saved state tracking: after Save, show a "Saved Timetables" section listing exam name with timestamp, with View and Delete buttons.

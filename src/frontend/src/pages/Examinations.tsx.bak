@@ -194,13 +194,18 @@ function ClassTimetableCard({
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<ExamTimetableEntry | null>(null);
+  const dragNode = useRef<HTMLTableRowElement | null>(null);
+
   const inputCls =
     "bg-gray-900 border border-gray-600 text-white text-xs rounded px-2 py-1 outline-none focus:border-green-500 transition";
 
-  function handleDragStart(e: React.DragEvent<HTMLElement>, index: number) {
+  function handleDragStart(
+    e: React.DragEvent<HTMLTableRowElement>,
+    index: number,
+  ) {
     setDraggingIndex(index);
+    dragNode.current = e.currentTarget;
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", String(index));
   }
 
   function handleDragOver(
@@ -222,17 +227,9 @@ function ClassTimetableCard({
       setDragOverIndex(null);
       return;
     }
-    // Only swap subjects (dates/days stay locked in their positions)
-    const newEntries = entries.map((entry) => ({ ...entry }));
-    const dragSubject = newEntries[draggingIndex].subject;
-    const dragMax = newEntries[draggingIndex].maxMarks;
-    const dragMin = newEntries[draggingIndex].minMarks;
-    newEntries[draggingIndex].subject = newEntries[dropIndex].subject;
-    newEntries[draggingIndex].maxMarks = newEntries[dropIndex].maxMarks;
-    newEntries[draggingIndex].minMarks = newEntries[dropIndex].minMarks;
-    newEntries[dropIndex].subject = dragSubject;
-    newEntries[dropIndex].maxMarks = dragMax;
-    newEntries[dropIndex].minMarks = dragMin;
+    const newEntries = [...entries];
+    const [removed] = newEntries.splice(draggingIndex, 1);
+    newEntries.splice(dropIndex, 0, removed);
     onEntriesChange(className, newEntries);
     setDraggingIndex(null);
     setDragOverIndex(null);
@@ -244,19 +241,13 @@ function ClassTimetableCard({
   }
 
   function moveRow(index: number, direction: "up" | "down") {
-    const newEntries = entries.map((entry) => ({ ...entry }));
+    const newEntries = [...entries];
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= newEntries.length) return;
-    // Only swap subjects (dates stay locked)
-    const tempSubject = newEntries[index].subject;
-    const tempMax = newEntries[index].maxMarks;
-    const tempMin = newEntries[index].minMarks;
-    newEntries[index].subject = newEntries[targetIndex].subject;
-    newEntries[index].maxMarks = newEntries[targetIndex].maxMarks;
-    newEntries[index].minMarks = newEntries[targetIndex].minMarks;
-    newEntries[targetIndex].subject = tempSubject;
-    newEntries[targetIndex].maxMarks = tempMax;
-    newEntries[targetIndex].minMarks = tempMin;
+    [newEntries[index], newEntries[targetIndex]] = [
+      newEntries[targetIndex],
+      newEntries[index],
+    ];
     onEntriesChange(className, newEntries);
   }
 
@@ -502,6 +493,8 @@ function ClassTimetableCard({
                 ) : (
                   <tr
                     key={e.id}
+                    draggable
+                    onDragStart={(ev) => handleDragStart(ev, i)}
                     onDragOver={(ev) => handleDragOver(ev, i)}
                     onDrop={(ev) => handleDrop(ev, i)}
                     onDragEnd={handleDragEnd}
@@ -519,47 +512,21 @@ function ClassTimetableCard({
                       dragOverIndex === i && draggingIndex !== i
                         ? "outline outline-2 outline-green-400 bg-green-900/20"
                         : ""
-                    }`}
+                    } cursor-grab active:cursor-grabbing`}
                     data-ocid={`exam.timetable.item.${i + 1}`}
                   >
                     <td className="px-3 py-2 text-gray-500">{i + 1}</td>
                     <td className="px-2 py-2">
-                      {/* Lock icon - date/day are locked */}
-                      <span
-                        className="text-gray-600 text-[10px]"
-                        title="Date is locked"
-                      >
-                        🔒
-                      </span>
+                      <GripVertical size={12} className="text-gray-600" />
                     </td>
-                    <td
-                      className="px-3 py-2 text-gray-400 whitespace-nowrap"
-                      title="Date locked - cannot be moved"
-                    >
+                    <td className="px-3 py-2 text-white whitespace-nowrap">
                       {e.date}
                     </td>
-                    <td
-                      className="px-3 py-2 text-yellow-400/70 whitespace-nowrap"
-                      title="Day locked - cannot be moved"
-                    >
+                    <td className="px-3 py-2 text-yellow-400 whitespace-nowrap">
                       {e.day}
                     </td>
-                    <td
-                      className="px-3 py-2 text-blue-300 font-medium cursor-grab active:cursor-grabbing"
-                      draggable
-                      onDragStart={(ev) => {
-                        ev.stopPropagation();
-                        handleDragStart(ev, i);
-                      }}
-                      title="Drag to reorder subject"
-                    >
-                      <span className="flex items-center gap-1.5">
-                        <GripVertical
-                          size={11}
-                          className="text-blue-400/70 shrink-0"
-                        />
-                        {e.subject}
-                      </span>
+                    <td className="px-3 py-2 text-blue-300 font-medium">
+                      {e.subject}
                     </td>
                     <td className="px-3 py-2 text-gray-300 whitespace-nowrap">
                       {e.timeFrom}
@@ -616,196 +583,6 @@ function ClassTimetableCard({
                 ),
               )
             )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-// ── Combined Excel-style timetable view ──────────────────────────────────────
-interface CombinedTimetableViewProps {
-  generatedByClass: Record<string, ExamTimetableEntry[]>;
-  classes: string[];
-  examName: string;
-}
-
-function CombinedTimetableView({
-  generatedByClass,
-  classes,
-  examName,
-}: CombinedTimetableViewProps) {
-  // Collect all unique dates across all classes, sorted chronologically
-  const allDatesSet = new Set<string>();
-  for (const cls of classes) {
-    for (const entry of generatedByClass[cls] || []) {
-      if (entry.date && entry.date !== "TBD") allDatesSet.add(entry.date);
-    }
-  }
-
-  // Sort dates chronologically (DD/MM/YYYY format)
-  const allDates = [...allDatesSet].sort((a, b) => {
-    const [da, ma, ya] = a.split("/").map(Number);
-    const [db, mb, yb] = b.split("/").map(Number);
-    return (
-      new Date(ya, ma - 1, da).getTime() - new Date(yb, mb - 1, db).getTime()
-    );
-  });
-
-  function getSubjectForClass(cls: string, date: string): string {
-    return (
-      (generatedByClass[cls] || []).find((e) => e.date === date)?.subject || "-"
-    );
-  }
-
-  function handlePrintCombined() {
-    const profile = (() => {
-      try {
-        return JSON.parse(localStorage.getItem("erp_school_profile") || "{}");
-      } catch {
-        return {};
-      }
-    })();
-    const schoolName = profile.schoolName || "School Name";
-    const headerCols = ["Date", "Day", ...classes]
-      .map(
-        (c) =>
-          `<th style="padding:6px 10px;background:#1a5276;color:#fff;font-size:11px;text-align:left;border:1px solid #bbb;">${c}</th>`,
-      )
-      .join("");
-    const bodyRows = allDates
-      .map((date) => {
-        const day = parseDayFromDate(date);
-        const subjectCols = classes
-          .map(
-            (cls) =>
-              `<td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;">${getSubjectForClass(cls, date)}</td>`,
-          )
-          .join("");
-        return `<tr><td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;white-space:nowrap;">${date}</td><td style="padding:5px 8px;border:1px solid #ddd;font-size:11px;color:#8B4513;">${day}</td>${subjectCols}</tr>`;
-      })
-      .join("");
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html>
-<html><head><title>Combined Timetable - ${examName}</title>
-<style>* { margin:0; padding:0; box-sizing:border-box; } body { font-family: Arial, sans-serif; padding: 20px; } h1 { text-align:center; font-size:18px; font-weight:bold; } h2 { text-align:center; font-size:14px; color:#1a5276; margin:4px 0 12px; } @media print { body { padding: 10px; } }</style>
-</head><body>
-<h1>${schoolName}</h1>
-<h2>${examName} — Combined Examination Timetable</h2>
-<table style="width:100%;border-collapse:collapse;">
-<thead><tr>${headerCols}</tr></thead>
-<tbody>${bodyRows}</tbody>
-</table>
-<div style="margin-top:40px;display:flex;justify-content:space-between;">
-<div style="text-align:center;width:180px;border-top:1px solid #000;padding-top:4px;font-size:11px;">Class Teacher</div>
-<div style="text-align:center;width:180px;border-top:1px solid #000;padding-top:4px;font-size:11px;">Principal</div>
-</div>
-</body></html>`);
-    win.document.close();
-    setTimeout(() => win.print(), 400);
-  }
-
-  function handleExportCSV() {
-    const header = ["Date", "Day", ...classes].join(",");
-    const rows = allDates.map((date) => {
-      const day = parseDayFromDate(date);
-      const subjectCols = classes.map((cls) => {
-        const subj = getSubjectForClass(cls, date);
-        return `"${subj.replace(/"/g, '""')}"`;
-      });
-      return [`"${date}"`, `"${day}"`, ...subjectCols].join(",");
-    });
-    const csv = [header, ...rows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${examName.replace(/[^a-zA-Z0-9]/g, "_")}_timetable.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  if (allDates.length === 0) return null;
-
-  return (
-    <div className="bg-gray-800 border border-gray-700 rounded-lg overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700">
-        <div>
-          <h3 className="text-white text-sm font-semibold">
-            📊 Combined Timetable — All Classes
-          </h3>
-          <p className="text-gray-400 text-[10px] mt-0.5">
-            Excel-style view: all classes in a single table
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handlePrintCombined}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded transition"
-            data-ocid="exam.combined.print_button"
-          >
-            🖨 Print Combined
-          </button>
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3 py-1.5 rounded transition"
-            data-ocid="exam.combined.secondary_button"
-          >
-            📥 Export CSV
-          </button>
-        </div>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr style={{ background: "#1a1f2e" }}>
-              <th className="text-left px-3 py-2 text-gray-300 whitespace-nowrap font-semibold border-r border-gray-700">
-                Date
-              </th>
-              <th className="text-left px-3 py-2 text-gray-300 whitespace-nowrap font-semibold border-r border-gray-700">
-                Day
-              </th>
-              {classes.map((cls) => (
-                <th
-                  key={cls}
-                  className="text-left px-3 py-2 text-blue-300 whitespace-nowrap font-semibold border-r border-gray-700"
-                >
-                  {cls}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {allDates.map((date, i) => {
-              const day = parseDayFromDate(date);
-              return (
-                <tr
-                  key={date}
-                  style={{ background: i % 2 === 0 ? "#111827" : "#0f1117" }}
-                >
-                  <td className="px-3 py-2 text-white whitespace-nowrap border-r border-gray-800 font-mono text-[11px]">
-                    {date}
-                  </td>
-                  <td className="px-3 py-2 text-yellow-400 whitespace-nowrap border-r border-gray-800">
-                    {day}
-                  </td>
-                  {classes.map((cls) => {
-                    const subj = getSubjectForClass(cls, date);
-                    return (
-                      <td
-                        key={cls}
-                        className={`px-3 py-2 border-r border-gray-800 ${subj === "-" ? "text-gray-600" : "text-blue-300 font-medium"}`}
-                      >
-                        {subj}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
           </tbody>
         </table>
       </div>
@@ -949,20 +726,12 @@ export function Examinations() {
       return;
     const availDates = getAvailableDates(wizardStartDate, wizardEndDate);
     const newByClass: Record<string, ExamTimetableEntry[]> = {};
+    const allNewEntries: ExamTimetableEntry[] = [];
 
     for (const cls of wizardClasses) {
       const subjects = wizardSubjects[cls] || [];
-      // Fisher-Yates shuffle a copy of subjects for random distribution each time
-      const shuffledSubjects = [...subjects];
-      for (let i = shuffledSubjects.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffledSubjects[i], shuffledSubjects[j]] = [
-          shuffledSubjects[j],
-          shuffledSubjects[i],
-        ];
-      }
       const classEntries: ExamTimetableEntry[] = [];
-      shuffledSubjects.forEach((subj, idx) => {
+      subjects.forEach((subj, idx) => {
         const dateStr = idx < availDates.length ? availDates[idx] : "TBD";
         const day = dateStr !== "TBD" ? parseDayFromDate(dateStr) : "TBD";
         const entry: ExamTimetableEntry = {
@@ -980,13 +749,24 @@ export function Examinations() {
           venue: "",
         };
         classEntries.push(entry);
+        allNewEntries.push(entry);
       });
       newByClass[cls] = classEntries;
     }
 
     setGeneratedByClass(newByClass);
     setShowGenerated(true);
-    // NOTE: Does NOT save to global timetableEntries. User must click "Save Timetable" explicitly.
+    // Merge into global timetable (remove old entries with same examGroup name + className)
+    setTimetableEntries((prev) => {
+      const filtered = prev.filter(
+        (e) =>
+          !(
+            e.examGroup === wizardExamName &&
+            wizardClasses.includes(e.className)
+          ),
+      );
+      return [...filtered, ...allNewEntries];
+    });
   }
 
   function handleClassEntriesChange(
@@ -994,7 +774,13 @@ export function Examinations() {
     newEntries: ExamTimetableEntry[],
   ) {
     setGeneratedByClass((prev) => ({ ...prev, [cls]: newEntries }));
-    // NOTE: Does not sync to global timetable until "Save Timetable" is clicked
+    // Sync to global timetable
+    setTimetableEntries((prev) => {
+      const others = prev.filter(
+        (e) => !(e.className === cls && e.examGroup === wizardExamName),
+      );
+      return [...others, ...newEntries];
+    });
   }
 
   function handleDeleteFromGenerated(id: string) {
@@ -1005,75 +791,7 @@ export function Examinations() {
       }
       return next;
     });
-    // NOTE: Does not sync to global timetable until "Save Timetable" is clicked
-  }
-
-  // Saved timetables list
-  const [savedTimetablesList, setSavedTimetablesList] = useState<
-    {
-      id: string;
-      examName: string;
-      savedAt: string;
-      classes: string[];
-      entryCount: number;
-    }[]
-  >(() => {
-    try {
-      return JSON.parse(localStorage.getItem("erp_saved_timetables") || "[]");
-    } catch {
-      return [];
-    }
-  });
-  const [savedListExpanded, setSavedListExpanded] = useState(false);
-  const [saveTimetableNotif, setSaveTimetableNotif] = useState<string | null>(
-    null,
-  );
-
-  function handleSaveTimetable() {
-    // Collect all entries from generatedByClass
-    const allNewEntries: ExamTimetableEntry[] = [];
-    for (const cls of Object.keys(generatedByClass)) {
-      allNewEntries.push(...generatedByClass[cls]);
-    }
-    if (allNewEntries.length === 0) return;
-
-    // Merge into global timetable (replace entries for same examGroup + class)
-    const classesInGenerated = Object.keys(generatedByClass);
-    setTimetableEntries((prev) => {
-      const filtered = prev.filter(
-        (e) =>
-          !(
-            e.examGroup === wizardExamName &&
-            classesInGenerated.includes(e.className)
-          ),
-      );
-      return [...filtered, ...allNewEntries];
-    });
-
-    // Save record to localStorage
-    const record = {
-      id: generateId(),
-      examName: wizardExamName,
-      savedAt: new Date().toLocaleString("en-IN"),
-      classes: classesInGenerated,
-      entryCount: allNewEntries.length,
-    };
-    setSavedTimetablesList((prev) => {
-      const updated = [...prev, record];
-      localStorage.setItem("erp_saved_timetables", JSON.stringify(updated));
-      return updated;
-    });
-
-    setSaveTimetableNotif("✅ Timetable saved successfully!");
-    setTimeout(() => setSaveTimetableNotif(null), 3000);
-  }
-
-  function handleDeleteSavedTimetable(id: string) {
-    setSavedTimetablesList((prev) => {
-      const updated = prev.filter((t) => t.id !== id);
-      localStorage.setItem("erp_saved_timetables", JSON.stringify(updated));
-      return updated;
-    });
+    setTimetableEntries((prev) => prev.filter((e) => e.id !== id));
   }
 
   // Manual entry functions
@@ -1596,31 +1314,13 @@ export function Examinations() {
           {/* ── SECTION 2: Generated Timetables ──────────────────────── */}
           {showGenerated && orderedGeneratedClasses.length > 0 && (
             <div className="space-y-3">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-white text-sm font-semibold">
-                    Generated Timetables
-                  </h3>
-                  <span className="text-gray-400 text-[10px]">
-                    — drag subject cells or use ▲▼ to reorder · dates are locked
-                    🔒
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {saveTimetableNotif && (
-                    <span className="text-green-400 text-xs font-medium animate-pulse">
-                      {saveTimetableNotif}
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={handleSaveTimetable}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-5 py-2 rounded-lg transition shadow-lg shadow-green-900/30"
-                    data-ocid="exam.timetable.save_button"
-                  >
-                    💾 Save Timetable
-                  </button>
-                </div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-white text-sm font-semibold">
+                  Generated Timetables
+                </h3>
+                <span className="text-gray-400 text-[10px]">
+                  — drag rows or use ▲▼ to reorder
+                </span>
               </div>
               {orderedGeneratedClasses.map((cls, idx) => (
                 <ClassTimetableCard
@@ -1635,120 +1335,8 @@ export function Examinations() {
                   onDeleteEntry={handleDeleteFromGenerated}
                 />
               ))}
-
-              {/* Combined Excel-style view */}
-              <CombinedTimetableView
-                generatedByClass={generatedByClass}
-                classes={orderedGeneratedClasses}
-                examName={wizardExamName}
-              />
-
-              {/* Save Timetable button (bottom) */}
-              <div className="flex justify-end pt-1">
-                <button
-                  type="button"
-                  onClick={handleSaveTimetable}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold px-6 py-2.5 rounded-lg transition shadow-lg shadow-green-900/30"
-                  data-ocid="exam.timetable.save_button"
-                >
-                  💾 Save Timetable
-                </button>
-              </div>
             </div>
           )}
-
-          {/* ── Saved Timetables List ─────────────────────────────────── */}
-          <div className="border border-gray-700 rounded-lg overflow-hidden">
-            <button
-              type="button"
-              onClick={() => setSavedListExpanded((p) => !p)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-gray-800 hover:bg-gray-750 transition"
-              data-ocid="exam.saved.toggle"
-            >
-              <span className="text-gray-300 text-xs font-medium flex items-center gap-2">
-                📋 Saved Timetables
-                {savedTimetablesList.length > 0 && (
-                  <span className="bg-green-700 text-green-200 text-[10px] px-1.5 py-0.5 rounded-full">
-                    {savedTimetablesList.length}
-                  </span>
-                )}
-              </span>
-              {savedListExpanded ? (
-                <ChevronUp size={14} className="text-gray-400" />
-              ) : (
-                <ChevronDown size={14} className="text-gray-400" />
-              )}
-            </button>
-            {savedListExpanded && (
-              <div className="bg-gray-800/60 p-4">
-                {savedTimetablesList.length === 0 ? (
-                  <p
-                    className="text-gray-500 text-xs"
-                    data-ocid="exam.saved.empty_state"
-                  >
-                    No timetables saved yet. Generate and save one above.
-                  </p>
-                ) : (
-                  <div className="rounded-lg overflow-hidden border border-gray-700">
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr style={{ background: "#1a1f2e" }}>
-                          {[
-                            "Exam Name",
-                            "Classes",
-                            "Saved On",
-                            "Entries",
-                            "Action",
-                          ].map((h) => (
-                            <th
-                              key={h}
-                              className="text-left px-3 py-2 text-gray-400 whitespace-nowrap"
-                            >
-                              {h}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {savedTimetablesList.map((t, i) => (
-                          <tr
-                            key={t.id}
-                            style={{
-                              background: i % 2 === 0 ? "#111827" : "#0f1117",
-                            }}
-                            data-ocid={`exam.saved.item.${i + 1}`}
-                          >
-                            <td className="px-3 py-2 text-blue-300 font-medium">
-                              {t.examName}
-                            </td>
-                            <td className="px-3 py-2 text-gray-300 max-w-[200px] truncate">
-                              {t.classes.join(", ")}
-                            </td>
-                            <td className="px-3 py-2 text-gray-400 whitespace-nowrap">
-                              {t.savedAt}
-                            </td>
-                            <td className="px-3 py-2 text-green-400">
-                              {t.entryCount} entries
-                            </td>
-                            <td className="px-3 py-2">
-                              <button
-                                type="button"
-                                onClick={() => handleDeleteSavedTimetable(t.id)}
-                                className="text-red-400 hover:text-red-300 text-[11px] flex items-center gap-1 transition"
-                                data-ocid="exam.saved.delete_button"
-                              >
-                                <Trash2 size={11} /> Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* ── SECTION 3: Manual Entry (collapsible) ────────────────── */}
           <div className="border border-gray-700 rounded-lg overflow-hidden">
