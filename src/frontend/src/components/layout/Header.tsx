@@ -110,6 +110,11 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // The label shown in the session button
+  const sessionButtonLabel = viewingSession
+    ? viewingSession
+    : `Current Session: ${currentActiveSession}`;
+
   return (
     <header
       className="flex items-center justify-between px-4 h-12 border-b border-gray-700 flex-shrink-0"
@@ -125,7 +130,7 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
           <Menu size={20} />
         </button>
         <span className="text-white font-semibold text-sm hidden sm:block">
-          School ERP
+          SHUBH SCHOOL ERP
         </span>
 
         {/* Branch Switcher */}
@@ -177,24 +182,22 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
             className={`flex items-center gap-1 text-xs border rounded px-2 py-1 transition ${
               viewingSession
                 ? "text-amber-300 bg-amber-900/30 border-amber-500/50 hover:bg-amber-900/40"
-                : "text-gray-300 bg-gray-800 hover:bg-gray-700 border-gray-600 hover:text-white"
+                : "text-green-300 bg-green-900/20 hover:bg-green-900/30 border-green-600/50 hover:text-white"
             }`}
             data-ocid="header.session.toggle"
           >
             <Archive
               size={11}
-              className={viewingSession ? "text-amber-400" : "text-blue-400"}
+              className={viewingSession ? "text-amber-400" : "text-green-400"}
             />
-            <span className="hidden sm:inline max-w-[100px] truncate">
-              {viewingSession
-                ? viewingSession
-                : currentActiveSession || "Session"}
+            <span className="hidden sm:inline max-w-[160px] truncate">
+              {sessionButtonLabel}
             </span>
             <ChevronDown size={11} />
           </button>
           {sessionOpen && (
             <div
-              className="absolute top-full left-0 mt-1 z-50 min-w-[160px] rounded border border-gray-600 shadow-xl"
+              className="absolute top-full left-0 mt-1 z-50 min-w-[180px] rounded border border-gray-600 shadow-xl"
               style={{ background: "#1e293b" }}
             >
               <div className="px-3 py-1.5 text-[10px] text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-700">
@@ -217,7 +220,7 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
                         : "text-gray-300"
                     }`}
                   >
-                    <span>{s}</span>
+                    <span>{isCurrent ? `Current Session: ${s}` : s}</span>
                     <span className="flex items-center gap-1">
                       {isCurrent && (
                         <span className="text-[9px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">

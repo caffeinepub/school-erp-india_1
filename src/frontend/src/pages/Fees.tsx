@@ -1411,9 +1411,6 @@ const _students = [
 ];
 
 const ALL_MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
   "Apr",
   "May",
   "Jun",
@@ -1423,6 +1420,9 @@ const ALL_MONTHS = [
   "Oct",
   "Nov",
   "Dec",
+  "Jan",
+  "Feb",
+  "Mar",
 ];
 const SCHOOL_MONTHS = [
   "Apr",
@@ -1687,14 +1687,10 @@ const CLASS_LIST = [
   "11th",
   "12th",
 ];
-const CATEGORIES = [
-  "English New Student",
-  "English Old Student",
-  "New Student",
-  "Old Student",
-];
-const GROUPS = ["General", "Transport", "Sports", "Lab"];
-const ACCOUNTS = [
+// CATEGORIES removed - not used in fee plan anymore
+// ─── Dynamic Groups/Accounts (from localStorage) ─────────────────────────────
+const DEFAULT_GROUPS = ["General", "Transport", "Sports", "Lab"];
+const DEFAULT_ACCOUNTS = [
   "Admission Fees",
   "Tuition Fees",
   "Computer",
@@ -1703,6 +1699,42 @@ const ACCOUNTS = [
   "TDS",
   "old year",
 ];
+
+// Initialize localStorage defaults on first load
+(() => {
+  if (!localStorage.getItem("erp_fee_groups")) {
+    localStorage.setItem("erp_fee_groups", JSON.stringify(DEFAULT_GROUPS));
+  }
+  if (!localStorage.getItem("erp_fee_accounts")) {
+    localStorage.setItem("erp_fee_accounts", JSON.stringify(DEFAULT_ACCOUNTS));
+  }
+})();
+
+function getGroups(): string[] {
+  try {
+    const val = localStorage.getItem("erp_fee_groups");
+    if (val) {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...DEFAULT_GROUPS];
+}
+
+function getAccounts(): string[] {
+  try {
+    const val = localStorage.getItem("erp_fee_accounts");
+    if (val) {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...DEFAULT_ACCOUNTS];
+}
 const FREQUENCIES = [
   "Annual",
   "Monthly",
@@ -2060,7 +2092,7 @@ function CollectFeesTab() {
   const handleWhatsAppDue = () => {
     if (!student) return;
     const msg = encodeURIComponent(
-      `Dear ${student.fatherName || "Parent"}, fees of ₹${netFees.toLocaleString("en-IN")} are due for ${student.name} (Adm. No. ${student.admNo}). Please pay at the earliest. - School ERP`,
+      `Dear ${student.fatherName || "Parent"}, fees of ₹${netFees.toLocaleString("en-IN")} are due for ${student.name} (Adm. No. ${student.admNo}). Please pay at the earliest. - SHUBH SCHOOL ERP`,
     );
     window.open(`https://wa.me/?text=${msg}`, "_blank");
   };
@@ -2068,7 +2100,7 @@ function CollectFeesTab() {
   const handleWhatsAppReceipt = () => {
     if (!student) return;
     const msg = encodeURIComponent(
-      `Dear ${student.fatherName || "Parent"}, fees receipt of ₹${rcptAmt.toLocaleString("en-IN")} has been generated for ${student.name} (Adm. No. ${student.admNo}). Receipt No: ${receiptNo}. Thank you. - School ERP`,
+      `Dear ${student.fatherName || "Parent"}, fees receipt of ₹${rcptAmt.toLocaleString("en-IN")} has been generated for ${student.name} (Adm. No. ${student.admNo}). Receipt No: ${receiptNo}. Thank you. - SHUBH SCHOOL ERP`,
     );
     window.open(`https://wa.me/?text=${msg}`, "_blank");
   };
@@ -2323,11 +2355,19 @@ function CollectFeesTab() {
           style={{ width: 110, borderRight: "1px solid #2d3748" }}
         >
           <div className="flex flex-col items-center">
-            <div className="w-20 h-20 rounded bg-gray-700 border border-gray-600 flex items-center justify-center mb-2">
+            <div className="w-20 h-20 rounded bg-gray-700 border border-gray-600 flex items-center justify-center mb-2 overflow-hidden">
               {student ? (
-                <span className="text-white text-xl font-bold">
-                  {student.name.charAt(0)}
-                </span>
+                (student as any).photo ? (
+                  <img
+                    src={(student as any).photo}
+                    alt={student.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-white text-xl font-bold">
+                    {student.name.charAt(0)}
+                  </span>
+                )
               ) : (
                 <User size={28} className="text-gray-500" />
               )}
@@ -3952,164 +3992,295 @@ function FeesRegisterTab() {
   );
 }
 
-// ─── DuesFeesTab ─────────────────────────────────────────────────────────────
-const DUES_FEE_HEADS = [
-  "Tuition Fee",
-  "Exam Fee",
-  "Library Fee",
-  "Sports Fee",
-  "Laboratory Fee",
-  "Transport Fee",
-  "Annual Fee",
+// ─── DuesFeesTab (Wizard) ─────────────────────────────────────────────────────
+
+const WIZARD_CLASS_LIST = [
+  "Nursery",
+  "LKG",
+  "UKG",
+  "1st",
+  "2nd",
+  "3rd",
+  "4th",
+  "5th",
+  "6th",
+  "7th",
+  "8th",
+  "9th",
+  "10th",
+  "11th",
+  "12th",
 ];
 
 function DuesFeesTab({ onCollect }: { onCollect: () => void }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [student, setStudent] = useState<StudentRecord | null>(null);
-  const [searchResults, setSearchResults] = useState<StudentRecord[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [monthsCount, setMonthsCount] = useState(3);
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
+  const [showReport, setShowReport] = useState(false);
+  const [selectedMonths, setSelectedMonths] = useState<string[]>([]);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  const [allMonths, setAllMonths] = useState(false);
+  const [allClasses, setAllClasses] = useState(false);
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+  const [waSending, setWaSending] = useState(false);
+  const [waSent, setWaSent] = useState(false);
 
-  const loadAllStudents = (): StudentRecord[] => {
-    try {
-      const ls = JSON.parse(
-        localStorage.getItem("erp_students") || "[]",
-      ) as StudentRecord[];
-      return ls.length > 0 ? ls : RECEIPT_STUDENTS;
-    } catch {
-      return RECEIPT_STUDENTS;
+  const toggleMonth = (m: string) => {
+    setSelectedMonths((prev) =>
+      prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m],
+    );
+  };
+
+  const toggleAllMonths = () => {
+    if (allMonths) {
+      setSelectedMonths([]);
+      setAllMonths(false);
+    } else {
+      setSelectedMonths([...SCHOOL_MONTHS]);
+      setAllMonths(true);
     }
   };
 
-  const handleSearch = (q: string) => {
-    setSearchQuery(q);
-    if (!q.trim()) {
-      setSearchResults([]);
-      setShowDropdown(false);
-      return;
+  const toggleClass = (c: string) => {
+    setSelectedClasses((prev) =>
+      prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c],
+    );
+  };
+
+  const toggleAllClasses = () => {
+    if (allClasses) {
+      setSelectedClasses([]);
+      setAllClasses(false);
+    } else {
+      setSelectedClasses([...WIZARD_CLASS_LIST]);
+      setAllClasses(true);
     }
-    const all = loadAllStudents();
-    const ql = q.toLowerCase();
-    const results = all
-      .filter(
-        (s) =>
-          s.admNo.toLowerCase().includes(ql) ||
-          s.name.toLowerCase().includes(ql),
-      )
-      .slice(0, 8);
-    setSearchResults(results);
-    setShowDropdown(results.length > 0);
   };
 
-  const selectStudent = (s: StudentRecord) => {
-    setStudent(s);
-    setSearchQuery(`${s.admNo} - ${s.name}`);
-    setShowDropdown(false);
-    setSearchResults([]);
-  };
-
-  // Compute dues data from erp_fee_payments
-  const duesData = (() => {
-    if (!student)
-      return { months: [], duesGrid: {}, totalDue: 0, monthsWithDues: 0 };
-    try {
-      const payments = JSON.parse(
-        localStorage.getItem("erp_fee_payments") || "[]",
-      ) as PaymentRecord[];
-      const studentPayments = payments.filter((p) => p.admNo === student.admNo);
-
-      // Get last N months from SCHOOL_MONTHS pattern
-      const allMonths = [
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-        "Jan",
-        "Feb",
-        "Mar",
-      ];
-      const curMonthIdx = new Date().getMonth();
-      // Map JS month index to school month
-      const jsToSchool: Record<number, string> = {
-        3: "Apr",
-        4: "May",
-        5: "Jun",
-        6: "Jul",
-        7: "Aug",
-        8: "Sep",
-        9: "Oct",
-        10: "Nov",
-        11: "Dec",
-        0: "Jan",
-        1: "Feb",
-        2: "Mar",
-      };
-      const curSchoolMonth = jsToSchool[curMonthIdx] || "Apr";
-      const curPos = allMonths.indexOf(curSchoolMonth);
-      const selectedMonthsList: string[] = [];
-      for (let i = 0; i < monthsCount; i++) {
-        const idx = (curPos - i + allMonths.length) % allMonths.length;
-        selectedMonthsList.unshift(allMonths[idx]);
+  // Build report data
+  const reportData = (() => {
+    if (!showReport) return [];
+    const allStudents: StudentRecord[] = (() => {
+      try {
+        const ls = JSON.parse(
+          localStorage.getItem("erp_students") || "[]",
+        ) as StudentRecord[];
+        return ls.length > 0 ? ls : RECEIPT_STUDENTS;
+      } catch {
+        return RECEIPT_STUDENTS;
       }
+    })();
+    const payments: PaymentRecord[] = (() => {
+      try {
+        return JSON.parse(localStorage.getItem("erp_fee_payments") || "[]");
+      } catch {
+        return [];
+      }
+    })();
+    const plans = (() => {
+      try {
+        return JSON.parse(
+          localStorage.getItem("erp_fee_plans") || "[]",
+        ) as Array<{ className: string; feesHead: string; value: number }>;
+      } catch {
+        return [];
+      }
+    })();
 
-      // Build dues grid: feeHead -> month -> amount due
-      const duesGrid: Record<string, Record<string, number>> = {};
-      for (const feeHead of DUES_FEE_HEADS) {
-        duesGrid[feeHead] = {};
-        for (const month of selectedMonthsList) {
-          // Find if this feeHead+month was paid
-          const paid = studentPayments.some(
-            (p) =>
-              p.months.includes(month) &&
-              p.feeRows.some((r) => r.feeHead === feeHead && r.checked),
+    const filteredStudents = allStudents.filter((s) => {
+      const cls = s.className?.replace(/Class\s*/i, "").trim() || s.className;
+      return selectedClasses.some(
+        (sc) =>
+          s.className?.toLowerCase().includes(sc.toLowerCase()) ||
+          cls?.toLowerCase() === sc.toLowerCase(),
+      );
+    });
+
+    return filteredStudents
+      .map((s) => {
+        const studentPayments = payments.filter((p) => p.admNo === s.admNo);
+        const monthAmounts: Record<string, number> = {};
+        let totalDue = 0;
+        for (const month of selectedMonths) {
+          const wasPaid = studentPayments.some(
+            (p) => p.months.includes(month) && p.receiptAmt > 0,
           );
-          // If not paid, show sample amount as due
-          if (!paid) {
-            const sampleAmt =
-              SAMPLE_FEE_TYPES.find((ft) => ft.type === feeHead)?.amount || 0;
-            if (sampleAmt > 0) duesGrid[feeHead][month] = sampleAmt;
+          if (!wasPaid) {
+            const classPlans = plans.filter((p) => p.className === s.className);
+            let monthAmt = classPlans.reduce((sum, p) => sum + p.value, 0);
+            if (monthAmt === 0) {
+              monthAmt = SAMPLE_FEE_TYPES.reduce(
+                (sum, ft) => sum + ft.amount,
+                0,
+              );
+            }
+            monthAmounts[month] = monthAmt;
+            totalDue += monthAmt;
+          } else {
+            monthAmounts[month] = 0;
           }
         }
-      }
+        // Add old balance dues from session archive
+        const oldDues =
+          s.prevSessionDues?.reduce(
+            (sum, d) =>
+              selectedMonths.includes(d.month) ? sum + d.amount : sum,
+            0,
+          ) || 0;
+        totalDue += oldDues;
+        return { student: s, monthAmounts, totalDue, oldDues };
+      })
+      .filter((row) => row.totalDue > 0);
+  })();
 
-      let totalDue = 0;
-      let monthsWithDues = 0;
-      const monthDueTotals: Record<string, number> = {};
-      for (const month of selectedMonthsList) {
-        let monthTotal = 0;
-        for (const feeHead of DUES_FEE_HEADS) {
-          monthTotal += duesGrid[feeHead][month] || 0;
-        }
-        monthDueTotals[month] = monthTotal;
-        if (monthTotal > 0) monthsWithDues++;
-        totalDue += monthTotal;
-      }
-
-      return {
-        months: selectedMonthsList,
-        duesGrid,
-        totalDue,
-        monthsWithDues,
-        monthDueTotals,
-      };
+  const schoolName = (() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem("erp_school_profile") || "{}").name ||
+        "SHUBH SCHOOL ERP"
+      );
     } catch {
-      return {
-        months: [],
-        duesGrid: {},
-        totalDue: 0,
-        monthsWithDues: 0,
-        monthDueTotals: {},
-      };
+      return "SHUBH SCHOOL ERP";
     }
   })();
 
-  const ic =
-    "bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-400 w-full";
+  const printDuesReport = () => {
+    const win = window.open("", "_blank", "width=1100,height=700");
+    if (!win) return;
+    const monthCols = selectedMonths
+      .map(
+        (m) =>
+          `<th style="border:1px solid #ccc;padding:4px 6px;background:#e8f0fe">${m}</th>`,
+      )
+      .join("");
+    const rows = reportData
+      .map((row, i) => {
+        const monthCells = selectedMonths
+          .map((m) => {
+            const amt = row.monthAmounts[m] || 0;
+            return `<td style="border:1px solid #ddd;padding:3px 6px;text-align:right;color:${amt > 0 ? "#dc2626" : "#16a34a"}">${amt > 0 ? `₹${amt.toLocaleString("en-IN")}` : "—"}</td>`;
+          })
+          .join("");
+        return `<tr style="background:${i % 2 === 0 ? "#fff" : "#f8f9fa"}">
+        <td style="border:1px solid #ddd;padding:3px 6px">${i + 1}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px">${row.student.admNo}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px;font-weight:600">${row.student.name}</td>
+        <td style="border:1px solid #ddd;padding:3px 6px">${row.student.className}</td>
+        ${monthCells}
+        <td style="border:1px solid #ddd;padding:3px 6px;text-align:right;font-weight:700;color:#dc2626">₹${row.totalDue.toLocaleString("en-IN")}</td>
+      </tr>`;
+      })
+      .join("");
+    const totalRow = `<tr style="background:#fff3cd;font-weight:700">
+      <td colspan="4" style="border:1px solid #ccc;padding:4px 6px;text-align:right">TOTAL DUE →</td>
+      ${selectedMonths.map((m) => `<td style="border:1px solid #ccc;padding:4px 6px;text-align:right;color:#dc2626">₹${reportData.reduce((s, r) => s + (r.monthAmounts[m] || 0), 0).toLocaleString("en-IN")}</td>`).join("")}
+      <td style="border:1px solid #ccc;padding:4px 6px;text-align:right;color:#dc2626">₹${reportData.reduce((s, r) => s + r.totalDue, 0).toLocaleString("en-IN")}</td>
+    </tr>`;
+    win.document.write(`<html><head><title>Dues Report</title><style>@page{margin:10mm}body{font-family:Arial;font-size:10px}table{border-collapse:collapse;width:100%}</style></head><body>
+      <div style="text-align:center;font-weight:700;font-size:14px;margin-bottom:4px">${schoolName}</div>
+      <div style="text-align:center;font-weight:700;font-size:11px;margin-bottom:8px;text-decoration:underline">DUES FEES REPORT — ${selectedMonths.join(", ")}</div>
+      <table><thead><tr>
+        <th style="border:1px solid #ccc;padding:4px 6px;background:#e8f0fe">#</th>
+        <th style="border:1px solid #ccc;padding:4px 6px;background:#e8f0fe">Adm No</th>
+        <th style="border:1px solid #ccc;padding:4px 6px;background:#e8f0fe">Student Name</th>
+        <th style="border:1px solid #ccc;padding:4px 6px;background:#e8f0fe">Class</th>
+        ${monthCols}
+        <th style="border:1px solid #ccc;padding:4px 6px;background:#e8f0fe">Total Due</th>
+      </tr></thead><tbody>${rows}${totalRow}</tbody></table>
+    </body></html>`);
+    win.document.close();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 400);
+  };
+
+  const exportCSV = () => {
+    const headers = [
+      "#",
+      "Adm No",
+      "Student Name",
+      "Class",
+      "Father",
+      ...selectedMonths,
+      "Total Due",
+    ];
+    const rows = reportData.map((row, i) => [
+      i + 1,
+      row.student.admNo,
+      row.student.name,
+      row.student.className,
+      row.student.fatherName,
+      ...selectedMonths.map((m) => row.monthAmounts[m] || 0),
+      row.totalDue,
+    ]);
+    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dues_report_${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const printReminderLetters = () => {
+    const win = window.open("", "_blank", "width=900,height=700");
+    if (!win) return;
+    const pages = reportData
+      .map((row) => {
+        const monthLines = selectedMonths
+          .filter((m) => (row.monthAmounts[m] || 0) > 0)
+          .map(
+            (m) =>
+              `<tr><td>${m}</td><td style="text-align:right;color:#dc2626">₹${(row.monthAmounts[m] || 0).toLocaleString("en-IN")}</td></tr>`,
+          )
+          .join("");
+        return `<div style="page-break-after:always;padding:20mm;font-family:Arial;font-size:11px">
+        <div style="text-align:center;font-weight:700;font-size:16px;margin-bottom:4px">${schoolName}</div>
+        <div style="text-align:center;font-size:11px;color:#555;margin-bottom:16px">FEES REMINDER LETTER</div>
+        <div style="margin-bottom:12px">Date: ${new Date().toLocaleDateString("en-IN")}</div>
+        <div style="margin-bottom:12px">Dear <b>${row.student.fatherName || "Parent"}</b>,</div>
+        <p>This is a reminder that the following fees are pending for your ward:</p>
+        <div style="margin:12px 0;padding:8px;border:1px solid #ccc">
+          <b>${row.student.name}</b> | Adm No: ${row.student.admNo} | Class: ${row.student.className}
+        </div>
+        <table style="border-collapse:collapse;width:60%;margin:12px 0">
+          <thead><tr style="background:#e8f0fe">
+            <th style="border:1px solid #ccc;padding:4px 8px;text-align:left">Month</th>
+            <th style="border:1px solid #ccc;padding:4px 8px;text-align:right">Amount Due</th>
+          </tr></thead>
+          <tbody>${monthLines}</tbody>
+          <tfoot><tr style="font-weight:700;background:#fff3cd">
+            <td style="border:1px solid #ccc;padding:4px 8px">TOTAL</td>
+            <td style="border:1px solid #ccc;padding:4px 8px;text-align:right;color:#dc2626">₹${row.totalDue.toLocaleString("en-IN")}</td>
+          </tr></tfoot>
+        </table>
+        <p>Please pay the above dues at the earliest to avoid any inconvenience.</p>
+        <div style="margin-top:40px">
+          <div>Yours sincerely,</div>
+          <div style="margin-top:24px">__________________</div>
+          <div>Principal / Accounts Office</div>
+          <div>${schoolName}</div>
+        </div>
+      </div>`;
+      })
+      .join("");
+    win.document.write(
+      `<html><head><title>Reminder Letters</title><style>@page{margin:0}body{margin:0}</style></head><body>${pages}</body></html>`,
+    );
+    win.document.close();
+    setTimeout(() => {
+      win.print();
+      win.close();
+    }, 400);
+  };
+
+  const handleSendWhatsApp = () => {
+    setWaSending(true);
+    setTimeout(() => {
+      setWaSending(false);
+      setWaSent(true);
+    }, 2000);
+  };
 
   return (
     <div
@@ -4127,254 +4298,321 @@ function DuesFeesTab({ onCollect }: { onCollect: () => void }) {
         }}
         className="px-4 py-3"
       >
-        <div className="flex items-center gap-2">
-          <span className="text-white font-bold text-sm tracking-wider">
-            💸 DUES FEES
-          </span>
-          <span className="text-purple-200 text-xs">
-            Month-wise fee dues for a student
-          </span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-sm tracking-wider">
+              💸 DUES FEES — Class-wise Wizard
+            </span>
+          </div>
+          {showReport && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowReport(false);
+                setWizardStep(1);
+              }}
+              className="text-purple-200 hover:text-white text-xs border border-purple-400/40 rounded px-2 py-1 transition"
+            >
+              ← Back to Wizard
+            </button>
+          )}
         </div>
       </div>
 
       <div className="p-4">
-        {/* Student search */}
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="col-span-2">
-            <label
-              htmlFor="dues-search"
-              className="text-gray-400 text-[10px] block mb-0.5"
-            >
-              Search Student (Name or Adm. No.)
-            </label>
-            <div className="relative">
-              <div className="flex items-center bg-gray-900 border border-gray-600 rounded overflow-hidden">
-                <Search
-                  size={13}
-                  className="text-gray-400 ml-2 flex-shrink-0"
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                  id="dues-search"
-                  placeholder="Type name or admission number..."
-                  className="flex-1 bg-transparent px-2 py-1.5 text-white text-xs outline-none"
-                  data-ocid="duesfees.search_input"
-                />
-                {searchQuery && (
+        {!showReport ? (
+          <>
+            {/* Wizard Steps Indicator */}
+            <div className="flex items-center gap-3 mb-5">
+              {[1, 2].map((step) => (
+                <div key={step} className="flex items-center gap-2">
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition ${wizardStep >= step ? "bg-purple-600 text-white" : "bg-gray-700 text-gray-400"}`}
+                  >
+                    {step}
+                  </div>
+                  <span
+                    className={`text-xs ${wizardStep >= step ? "text-white" : "text-gray-500"}`}
+                  >
+                    {step === 1 ? "Select Months" : "Select Classes"}
+                  </span>
+                  {step < 2 && (
+                    <ChevronRight size={14} className="text-gray-600" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Step 1: Month Selection */}
+            {wizardStep === 1 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-white font-semibold text-sm">
+                    Step 1: Select Months
+                  </h3>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allMonths}
+                      onChange={toggleAllMonths}
+                      className="accent-purple-500 w-3 h-3"
+                      data-ocid="duesfees.allmonths.checkbox"
+                    />
+                    <span className="text-gray-300 text-xs">Select All</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-4 gap-2 mb-6">
+                  {SCHOOL_MONTHS.map((m) => (
+                    <label
+                      key={m}
+                      className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition ${selectedMonths.includes(m) ? "border-purple-500 bg-purple-900/30 text-white" : "border-gray-700 bg-gray-800/40 text-gray-400 hover:border-gray-500"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedMonths.includes(m)}
+                        onChange={() => toggleMonth(m)}
+                        className="accent-purple-500 w-3 h-3"
+                        data-ocid="duesfees.month.checkbox"
+                      />
+                      <span className="text-sm font-medium">{m}</span>
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end">
                   <button
                     type="button"
                     onClick={() => {
-                      setSearchQuery("");
-                      setStudent(null);
-                      setSearchResults([]);
-                      setShowDropdown(false);
+                      if (selectedMonths.length === 0) {
+                        toast.error("Select at least one month");
+                        return;
+                      }
+                      setWizardStep(2);
                     }}
-                    className="text-gray-400 hover:text-white mr-2"
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2 rounded text-sm font-medium transition"
+                    data-ocid="duesfees.next.primary_button"
                   >
-                    <X size={12} />
+                    Next →
                   </button>
-                )}
+                </div>
               </div>
-              {showDropdown && searchResults.length > 0 && (
-                <div
-                  className="absolute left-0 right-0 top-full z-20 rounded-b shadow-xl"
-                  style={{
-                    background: "#1a1f2e",
-                    border: "1px solid #374151",
-                    borderTop: "none",
-                  }}
-                >
-                  {searchResults.map((s) => (
-                    <button
-                      key={s.admNo}
-                      type="button"
-                      onClick={() => selectStudent(s)}
-                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-blue-900/40 flex items-center gap-2"
-                      data-ocid="duesfees.student.button"
+            )}
+
+            {/* Step 2: Class Selection */}
+            {wizardStep === 2 && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-white font-semibold text-sm">
+                    Step 2: Select Classes
+                  </h3>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allClasses}
+                      onChange={toggleAllClasses}
+                      className="accent-purple-500 w-3 h-3"
+                      data-ocid="duesfees.allclasses.checkbox"
+                    />
+                    <span className="text-gray-300 text-xs">Select All</span>
+                  </label>
+                </div>
+                <div className="grid grid-cols-4 gap-2 mb-6">
+                  {WIZARD_CLASS_LIST.map((c) => (
+                    <label
+                      key={c}
+                      className={`flex items-center gap-2 p-2 rounded cursor-pointer border transition ${selectedClasses.includes(c) ? "border-blue-500 bg-blue-900/30 text-white" : "border-gray-700 bg-gray-800/40 text-gray-400 hover:border-gray-500"}`}
                     >
-                      <User size={11} className="text-blue-400" />
-                      <span className="text-blue-300">{s.admNo}</span>
-                      <span className="text-white">{s.name}</span>
-                      <span className="text-gray-400 ml-auto">
-                        {s.className}
-                      </span>
-                    </button>
+                      <input
+                        type="checkbox"
+                        checked={selectedClasses.includes(c)}
+                        onChange={() => toggleClass(c)}
+                        className="accent-blue-500 w-3 h-3"
+                        data-ocid="duesfees.class.checkbox"
+                      />
+                      <span className="text-sm font-medium">{c}</span>
+                    </label>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-          <div>
-            <label
-              htmlFor="dues-months-input"
-              className="text-gray-400 text-[10px] block mb-0.5"
-            >
-              Show Dues for Last N Months (1-12)
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                max={12}
-                value={monthsCount}
-                onChange={(e) =>
-                  setMonthsCount(
-                    Math.min(12, Math.max(1, Number(e.target.value))),
-                  )
-                }
-                id="dues-months-input"
-                className={ic}
-                style={{ width: 60 }}
-                data-ocid="duesfees.months.input"
-              />
-              <input
-                type="range"
-                min={1}
-                max={12}
-                value={monthsCount}
-                onChange={(e) => setMonthsCount(Number(e.target.value))}
-                className="flex-1 accent-purple-500"
-                data-ocid="duesfees.months.range"
-              />
-              <span className="text-purple-400 text-xs font-bold">
-                {monthsCount}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Student info bar */}
-        {student && (
-          <div
-            className="flex items-center gap-4 mb-4 px-4 py-2 rounded-lg text-xs"
-            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
-          >
-            <div className="flex items-center gap-2">
-              <User size={14} className="text-purple-400" />
-              <span className="text-white font-semibold">{student.name}</span>
-            </div>
-            <span className="text-gray-400">
-              Adm: <span className="text-blue-400">{student.admNo}</span>
-            </span>
-            <span className="text-gray-400">
-              Class: <span className="text-gray-200">{student.className}</span>
-            </span>
-            <span className="text-gray-400">
-              Old Bal:{" "}
-              <span className="text-red-400">
-                ₹{(student.oldBalance || 0).toLocaleString("en-IN")}
-              </span>
-            </span>
-            <button
-              type="button"
-              onClick={onCollect}
-              className="ml-auto bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded text-xs font-medium transition"
-              data-ocid="duesfees.collect_button"
-            >
-              Collect Fees
-            </button>
-          </div>
-        )}
-
-        {!student ? (
-          <div
-            className="text-center py-16 text-gray-500 rounded-lg"
-            style={{ background: "#111827", border: "1px dashed #374151" }}
-            data-ocid="duesfees.empty_state"
-          >
-            <div className="text-4xl mb-2">💸</div>
-            <div className="text-sm">
-              Search for a student to view month-wise dues
-            </div>
-          </div>
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep(1)}
+                    className="border border-gray-600 text-gray-400 hover:text-white px-4 py-2 rounded text-sm transition"
+                    data-ocid="duesfees.back.button"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedClasses.length === 0) {
+                        toast.error("Select at least one class");
+                        return;
+                      }
+                      setShowReport(true);
+                    }}
+                    className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded text-sm font-medium transition"
+                    data-ocid="duesfees.generate.primary_button"
+                  >
+                    Generate Report
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
-          <>
-            {/* Summary KPIs */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div
-                className="rounded-lg p-3"
-                style={{ background: "#1a1f2e", border: "1px solid #374151" }}
-              >
-                <p className="text-gray-400 text-[10px]">Total Dues</p>
-                <p className="text-red-400 text-xl font-bold">
-                  ₹{duesData.totalDue.toLocaleString("en-IN")}
-                </p>
-              </div>
-              <div
-                className="rounded-lg p-3"
-                style={{ background: "#1a1f2e", border: "1px solid #374151" }}
-              >
-                <p className="text-gray-400 text-[10px]">Months with Dues</p>
-                <p className="text-yellow-400 text-xl font-bold">
-                  {duesData.monthsWithDues}
-                </p>
-              </div>
-              <div
-                className="rounded-lg p-3"
-                style={{ background: "#1a1f2e", border: "1px solid #374151" }}
-              >
-                <p className="text-gray-400 text-[10px]">Months Checked</p>
-                <p className="text-purple-400 text-xl font-bold">
-                  {monthsCount}
-                </p>
+          // Report View
+          <div>
+            {/* Actions Toolbar */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              <span className="text-gray-400 text-xs">
+                Months:{" "}
+                <span className="text-purple-300 font-medium">
+                  {selectedMonths.join(", ")}
+                </span>
+              </span>
+              <span className="text-gray-600">|</span>
+              <span className="text-gray-400 text-xs">
+                Classes:{" "}
+                <span className="text-blue-300 font-medium">
+                  {selectedClasses.join(", ")}
+                </span>
+              </span>
+              <span className="text-gray-600">|</span>
+              <span className="text-red-400 text-xs font-semibold">
+                {reportData.length} students with dues
+              </span>
+              <div className="flex gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={printDuesReport}
+                  className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+                  data-ocid="duesfees.print.button"
+                >
+                  <Printer size={13} /> Print
+                </button>
+                <button
+                  type="button"
+                  onClick={exportCSV}
+                  className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+                  data-ocid="duesfees.excel.button"
+                >
+                  📊 Excel Export
+                </button>
+                <button
+                  type="button"
+                  onClick={printReminderLetters}
+                  className="flex items-center gap-1.5 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+                  data-ocid="duesfees.reminder.button"
+                >
+                  <ScrollText size={13} /> Reminder Letter
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWhatsAppModal(true);
+                    setWaSent(false);
+                  }}
+                  className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+                  data-ocid="duesfees.whatsapp.button"
+                >
+                  <MessageSquare size={13} /> WhatsApp Reminder
+                </button>
+                <button
+                  type="button"
+                  onClick={onCollect}
+                  className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded font-medium transition"
+                  data-ocid="duesfees.collect.button"
+                >
+                  Collect Fees
+                </button>
               </div>
             </div>
 
-            {/* Dues Grid */}
-            <div
-              className="rounded-lg overflow-x-auto"
-              style={{ border: "1px solid #374151" }}
-            >
-              <table
-                className="w-full text-xs"
-                style={{ borderCollapse: "collapse" }}
+            {/* Report Table */}
+            {reportData.length === 0 ? (
+              <div
+                className="text-center py-12 text-gray-500 rounded-lg"
+                style={{ background: "#111827", border: "1px dashed #374151" }}
+                data-ocid="duesfees.empty_state"
               >
-                <thead>
-                  <tr style={{ background: "#1a1f2e" }}>
-                    <th
-                      className="text-left px-3 py-2 text-gray-400 font-medium"
-                      style={{ minWidth: 120 }}
-                    >
-                      Fee Head
-                    </th>
-                    {duesData.months.map((m) => (
-                      <th
-                        key={m}
-                        className="px-3 py-2 text-gray-400 font-medium text-right"
-                        style={{ minWidth: 80 }}
-                      >
-                        {m}
+                <div className="text-3xl mb-2">✅</div>
+                <div>No dues found for selected months and classes</div>
+              </div>
+            ) : (
+              <div
+                className="rounded-lg overflow-x-auto"
+                style={{ border: "1px solid #374151" }}
+              >
+                <table
+                  className="w-full text-xs"
+                  style={{ borderCollapse: "collapse", minWidth: 700 }}
+                >
+                  <thead>
+                    <tr style={{ background: "#1a1f2e" }}>
+                      <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                        #
                       </th>
-                    ))}
-                    <th
-                      className="px-3 py-2 text-gray-400 font-medium text-right"
-                      style={{ minWidth: 80 }}
-                    >
-                      Total
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {DUES_FEE_HEADS.map((feeHead, i) => {
-                    const rowTotal = duesData.months.reduce(
-                      (s, m) =>
-                        s + ((duesData.duesGrid as any)[feeHead]?.[m] || 0),
-                      0,
-                    );
-                    return (
+                      <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                        Adm No
+                      </th>
+                      <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                        Student Name
+                      </th>
+                      <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                        Class
+                      </th>
+                      <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                        Section
+                      </th>
+                      {selectedMonths.map((m) => (
+                        <th
+                          key={m}
+                          className="px-3 py-2 text-gray-400 font-medium text-right"
+                        >
+                          {m}
+                        </th>
+                      ))}
+                      <th className="px-3 py-2 text-gray-400 font-medium text-right">
+                        Total Due
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reportData.map((row, i) => (
                       <tr
-                        key={feeHead}
+                        key={row.student.admNo}
                         style={{
                           background: i % 2 === 0 ? "#111827" : "#0d111c",
                           borderBottom: "1px solid #1f2937",
                         }}
+                        data-ocid={`duesfees.item.${i + 1}`}
                       >
-                        <td className="px-3 py-2 text-white">{feeHead}</td>
-                        {duesData.months.map((m) => {
-                          const amt =
-                            (duesData.duesGrid as any)[feeHead]?.[m] || 0;
+                        <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                        <td className="px-3 py-2 text-yellow-400">
+                          {row.student.admNo}
+                        </td>
+                        <td className="px-3 py-2 text-white font-medium flex items-center gap-2">
+                          {(row.student as any).photo ? (
+                            <img
+                              src={(row.student as any).photo}
+                              alt=""
+                              className="w-5 h-5 rounded-full object-cover flex-shrink-0"
+                            />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-purple-700 flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
+                              {row.student.name.charAt(0)}
+                            </div>
+                          )}
+                          {row.student.name}
+                        </td>
+                        <td className="px-3 py-2 text-gray-300">
+                          {row.student.className}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400">
+                          {(row.student as any).section || "—"}
+                        </td>
+                        {selectedMonths.map((m) => {
+                          const amt = row.monthAmounts[m] || 0;
                           return (
                             <td
                               key={m}
@@ -4387,143 +4625,164 @@ function DuesFeesTab({ onCollect }: { onCollect: () => void }) {
                             </td>
                           );
                         })}
-                        <td
-                          className="px-3 py-2 text-right font-bold"
-                          style={{
-                            color: rowTotal > 0 ? "#f87171" : "#4b5563",
-                          }}
-                        >
-                          {rowTotal > 0
-                            ? `₹${rowTotal.toLocaleString("en-IN")}`
-                            : "—"}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {/* Column totals row */}
-                  <tr
-                    style={{
-                      background: "#1a1f2e",
-                      borderTop: "2px solid #374151",
-                    }}
-                  >
-                    <td className="px-3 py-2 text-gray-400 font-semibold">
-                      TOTAL DUE
-                    </td>
-                    {duesData.months.map((m) => {
-                      const colTotal =
-                        (duesData.monthDueTotals as any)?.[m] || 0;
-                      return (
-                        <td
-                          key={m}
-                          className="px-3 py-2 text-right font-bold"
-                          style={{
-                            color: colTotal > 0 ? "#fbbf24" : "#4b5563",
-                          }}
-                        >
-                          {colTotal > 0
-                            ? `₹${colTotal.toLocaleString("en-IN")}`
-                            : "—"}
-                        </td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-right font-bold text-red-400">
-                      ₹{duesData.totalDue.toLocaleString("en-IN")}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Previous Session Dues */}
-            {student?.prevSessionDues && student.prevSessionDues.length > 0 && (
-              <div className="mt-5">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-white text-xs font-semibold">
-                    Previous Session Dues
-                  </span>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                    style={{
-                      background: "#7c3aed30",
-                      color: "#a78bfa",
-                      border: "1px solid #7c3aed50",
-                    }}
-                  >
-                    {student.prevSessionDues[0]?.sessionLabel || "Previous"}
-                  </span>
-                </div>
-                <div
-                  className="rounded-lg overflow-hidden"
-                  style={{ border: "1px solid #374151" }}
-                >
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr style={{ background: "#1a1f2e" }}>
-                        <th className="text-left px-3 py-2 text-gray-400 font-medium">
-                          Month
-                        </th>
-                        <th className="text-left px-3 py-2 text-gray-400 font-medium">
-                          Session
-                        </th>
-                        <th className="text-right px-3 py-2 text-gray-400 font-medium">
-                          Due Amount
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {student.prevSessionDues.map((d, i) => (
-                        <tr
-                          key={`${d.sessionLabel}-${d.month}`}
-                          style={{
-                            background: i % 2 === 0 ? "#111827" : "#0d111c",
-                            borderBottom: "1px solid #1f2937",
-                          }}
-                        >
-                          <td className="px-3 py-2 text-white">{d.month}</td>
-                          <td className="px-3 py-2">
-                            <span
-                              className="text-[10px] px-2 py-0.5 rounded-full"
-                              style={{
-                                background: "#7c3aed20",
-                                color: "#a78bfa",
-                              }}
-                            >
-                              {d.sessionLabel}
-                            </span>
-                          </td>
-                          <td className="px-3 py-2 text-right text-red-400 font-semibold">
-                            ₹{d.amount.toLocaleString("en-IN")}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr
-                        style={{
-                          background: "#1a1f2e",
-                          borderTop: "2px solid #374151",
-                        }}
-                      >
-                        <td
-                          colSpan={2}
-                          className="px-3 py-2 text-gray-400 font-semibold"
-                        >
-                          TOTAL PREVIOUS SESSION DUES
-                        </td>
                         <td className="px-3 py-2 text-right font-bold text-red-400">
-                          ₹
-                          {student.prevSessionDues
-                            .reduce((s, d) => s + d.amount, 0)
-                            .toLocaleString("en-IN")}
+                          ₹{row.totalDue.toLocaleString("en-IN")}
                         </td>
                       </tr>
-                    </tbody>
-                  </table>
-                </div>
+                    ))}
+                    {/* Footer totals row */}
+                    <tr
+                      style={{
+                        background: "#1a1f2e",
+                        borderTop: "2px solid #374151",
+                      }}
+                    >
+                      <td
+                        colSpan={5}
+                        className="px-3 py-2 text-gray-400 font-semibold text-right"
+                      >
+                        TOTAL DUE →
+                      </td>
+                      {selectedMonths.map((m) => {
+                        const colTotal = reportData.reduce(
+                          (s, r) => s + (r.monthAmounts[m] || 0),
+                          0,
+                        );
+                        return (
+                          <td
+                            key={m}
+                            className="px-3 py-2 text-right font-bold"
+                            style={{
+                              color: colTotal > 0 ? "#fbbf24" : "#4b5563",
+                            }}
+                          >
+                            {colTotal > 0
+                              ? `₹${colTotal.toLocaleString("en-IN")}`
+                              : "—"}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-2 text-right font-bold text-red-400">
+                        ₹
+                        {reportData
+                          .reduce((s, r) => s + r.totalDue, 0)
+                          .toLocaleString("en-IN")}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
-          </>
+          </div>
         )}
       </div>
+
+      {/* WhatsApp Reminder Modal */}
+      {showWhatsAppModal && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+          data-ocid="duesfees.whatsapp.modal"
+        >
+          <div
+            className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-xl shadow-2xl"
+            style={{ borderTop: "3px solid #22c55e" }}
+          >
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+              <div className="flex items-center gap-2">
+                <MessageSquare size={15} className="text-green-400" />
+                <h3 className="text-white font-semibold">WhatsApp Reminder</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWhatsAppModal(false)}
+                className="text-gray-400 hover:text-white"
+                data-ocid="duesfees.whatsapp.close_button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5">
+              <div className="mb-3 text-gray-300 text-sm">
+                Sending reminders to{" "}
+                <span className="text-green-400 font-bold">
+                  {reportData.length} parents
+                </span>{" "}
+                for months:{" "}
+                <span className="text-purple-300">
+                  {selectedMonths.join(", ")}
+                </span>
+              </div>
+              {/* Message Preview */}
+              <div
+                className="rounded-lg p-3 mb-4"
+                style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+              >
+                <div className="text-gray-400 text-[10px] mb-1 font-semibold uppercase">
+                  Message Preview
+                </div>
+                <div className="text-gray-200 text-xs italic">
+                  "Dear [Parent], fees due for [Student Name]:{" "}
+                  {selectedMonths.join(", ")} = ₹[Amount]. Please pay at
+                  earliest. — {schoolName}"
+                </div>
+              </div>
+              {/* Student list */}
+              <div className="max-h-52 overflow-y-auto space-y-1 mb-4">
+                {reportData.map((row, i) => (
+                  <div
+                    key={row.student.admNo}
+                    className="flex items-center justify-between px-3 py-2 rounded text-xs"
+                    style={{ background: i % 2 === 0 ? "#111827" : "#0d111c" }}
+                    data-ocid={`duesfees.wa.item.${i + 1}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-green-800 flex items-center justify-center text-white text-[9px]">
+                        {row.student.name.charAt(0)}
+                      </div>
+                      <span className="text-white">{row.student.name}</span>
+                      <span className="text-gray-500">
+                        {row.student.contact || "—"}
+                      </span>
+                    </div>
+                    <span className="text-red-400 font-semibold">
+                      ₹{row.totalDue.toLocaleString("en-IN")}
+                    </span>
+                    {waSent && (
+                      <span className="text-green-400 text-[10px]">✓ Sent</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {!waSent ? (
+                <button
+                  type="button"
+                  onClick={handleSendWhatsApp}
+                  disabled={waSending}
+                  className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white py-2.5 rounded font-semibold transition flex items-center justify-center gap-2"
+                  data-ocid="duesfees.wa.send.primary_button"
+                >
+                  {waSending ? (
+                    <>
+                      <span className="animate-spin">⟳</span> Sending...
+                    </>
+                  ) : (
+                    <>
+                      <MessageSquare size={15} /> Send All WhatsApp Reminders
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div
+                  className="text-center text-green-400 font-semibold py-2"
+                  data-ocid="duesfees.wa.success_state"
+                >
+                  ✓ All {reportData.length} reminders sent successfully!
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -4538,6 +4797,8 @@ export function Fees() {
     | "plan"
     | "othercharges"
     | "register"
+    | "groups"
+    | "accounts"
   >("collect");
   const [fees, _setFees] = useState<FeeRecord[]>(initialFees);
   const [search, setSearch] = useState("");
@@ -4585,7 +4846,6 @@ export function Fees() {
     feesHead: "Admission Fee",
     value: "",
     classes: [] as string[],
-    categories: [] as string[],
     selectAll: false,
   });
 
@@ -4607,17 +4867,21 @@ export function Fees() {
 
   const addHeading = () => {
     if (!masterForm.heading.trim()) return;
-    setHeadings((p) => [
-      ...p,
-      {
-        id: headings.length + 1,
-        heading: masterForm.heading,
-        group: masterForm.group,
-        account: masterForm.account,
-        frequency: masterForm.frequency,
-        months: masterForm.months,
-      },
-    ]);
+    const newHeading: FeeHeading = {
+      id: headings.length + 1,
+      heading: masterForm.heading,
+      group: masterForm.group,
+      account: masterForm.account,
+      frequency: masterForm.frequency,
+      months: masterForm.months,
+    };
+    const updated = [...headings, newHeading];
+    setHeadings(updated);
+    try {
+      localStorage.setItem("erp_fee_master_headings", JSON.stringify(updated));
+    } catch {
+      /* ignore */
+    }
     setMasterForm({
       heading: "",
       group: "General",
@@ -4629,37 +4893,35 @@ export function Fees() {
 
   const deleteHeading = () => {
     if (!selectedHeading) return;
-    setHeadings((p) => p.filter((h) => h.id !== selectedHeading.id));
+    const updated = headings.filter((h) => h.id !== selectedHeading.id);
+    setHeadings(updated);
+    try {
+      localStorage.setItem("erp_fee_master_headings", JSON.stringify(updated));
+    } catch {
+      /* ignore */
+    }
     setSelectedHeading(null);
   };
 
   const savePlan = () => {
-    if (
-      !planForm.feesHead ||
-      !planForm.value ||
-      planForm.classes.length === 0 ||
-      planForm.categories.length === 0
-    )
+    if (!planForm.feesHead || !planForm.value || planForm.classes.length === 0)
       return;
     let nextId = plans.length + 1;
     const newRows: FeePlan[] = [];
     for (const cls of planForm.classes) {
-      for (const cat of planForm.categories) {
-        newRows.push({
-          id: nextId++,
-          className: cls,
-          category: cat,
-          feesHead: planForm.feesHead,
-          value: Number(planForm.value),
-        });
-      }
+      newRows.push({
+        id: nextId++,
+        className: cls,
+        category: "General",
+        feesHead: planForm.feesHead,
+        value: Number(planForm.value),
+      });
     }
     setPlans((p) => [...p, ...newRows]);
     setPlanForm((p) => ({
       ...p,
       value: "",
       classes: [],
-      categories: [],
       selectAll: false,
     }));
   };
@@ -4683,15 +4945,6 @@ export function Fees() {
     });
   };
 
-  const toggleCategory = (cat: string) => {
-    setPlanForm((p) => ({
-      ...p,
-      categories: p.categories.includes(cat)
-        ? p.categories.filter((c) => c !== cat)
-        : [...p.categories, cat],
-    }));
-  };
-
   const toggleSelectAll = () => {
     setPlanForm((p) => ({
       ...p,
@@ -4709,6 +4962,8 @@ export function Fees() {
     if (t === "plan") return "Fees Plan";
     if (t === "othercharges") return "Other Charges";
     if (t === "register") return "📋 Fee Register";
+    if (t === "groups") return "👥 Groups";
+    if (t === "accounts") return "🏦 Accounts";
     return t;
   };
 
@@ -4730,6 +4985,8 @@ export function Fees() {
             "master",
             "plan",
             "othercharges",
+            "groups",
+            "accounts",
           ] as const
         ).map((t) => (
           <button
@@ -4955,7 +5212,7 @@ export function Fees() {
                   data-ocid="master.group.select"
                   className="w-36 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
                 >
-                  {GROUPS.map((g) => (
+                  {getGroups().map((g) => (
                     <option key={g}>{g}</option>
                   ))}
                 </select>
@@ -4974,7 +5231,7 @@ export function Fees() {
                   data-ocid="master.account.select"
                   className="w-36 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
                 >
-                  {ACCOUNTS.map((a) => (
+                  {getAccounts().map((a) => (
                     <option key={a}>{a}</option>
                   ))}
                 </select>
@@ -5229,14 +5486,14 @@ export function Fees() {
               </label>
               <span className="text-gray-400 text-xs ml-2">Choose Classes</span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div className="border border-gray-700 rounded overflow-hidden">
                 <div className="bg-gray-700/40 px-3 py-1.5">
                   <span className="text-gray-300 text-xs font-medium">
                     Classes
                   </span>
                 </div>
-                <div className="max-h-40 overflow-y-auto">
+                <div className="max-h-40 overflow-y-auto grid grid-cols-4">
                   {CLASS_LIST.map((cls, idx) => (
                     <label
                       key={cls}
@@ -5249,29 +5506,6 @@ export function Fees() {
                         className="accent-blue-500 w-3 h-3"
                       />
                       <span className="text-gray-300">{cls}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div className="border border-gray-700 rounded overflow-hidden">
-                <div className="bg-gray-700/40 px-3 py-1.5">
-                  <span className="text-gray-300 text-xs font-medium">
-                    Choose Category
-                  </span>
-                </div>
-                <div>
-                  {CATEGORIES.map((cat, idx) => (
-                    <label
-                      key={cat}
-                      className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer text-xs ${idx % 2 === 0 ? "bg-gray-800/60" : "bg-gray-700/20"}`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={planForm.categories.includes(cat)}
-                        onChange={() => toggleCategory(cat)}
-                        className="accent-blue-500 w-3 h-3"
-                      />
-                      <span className="text-gray-300">{cat}</span>
                     </label>
                   ))}
                 </div>
@@ -5292,7 +5526,7 @@ export function Fees() {
             <table className="w-full text-xs">
               <thead>
                 <tr style={{ background: "#1a1f2e" }}>
-                  {["Class", "Category", "Fees Head", "Value"].map((h) => (
+                  {["Class", "Fees Head", "Value"].map((h) => (
                     <th
                       key={h}
                       className="text-left px-3 py-2 text-gray-400 font-medium"
@@ -5328,9 +5562,6 @@ export function Fees() {
                   >
                     <td className="px-3 py-1.5 text-white">{row.className}</td>
                     <td className="px-3 py-1.5 text-gray-300">
-                      {row.category}
-                    </td>
-                    <td className="px-3 py-1.5 text-gray-300">
                       {row.feesHead}
                     </td>
                     <td className="px-3 py-1.5 text-green-400">
@@ -5365,12 +5596,6 @@ export function Fees() {
                 Class:{" "}
                 <span className="text-gray-200">
                   {selectedPlan?.className || "—"}
-                </span>
-              </span>
-              <span className="text-gray-500">
-                Category:{" "}
-                <span className="text-gray-200">
-                  {selectedPlan?.category || "—"}
                 </span>
               </span>
               <span className="text-gray-500">
@@ -5438,6 +5663,461 @@ export function Fees() {
           </div>
         </div>
       )}
+      {/* ── GROUPS TAB ── */}
+      {tab === "groups" && <GroupsSubModule />}
+
+      {/* ── ACCOUNTS TAB ── */}
+      {tab === "accounts" && <AccountsSubModule />}
+    </div>
+  );
+}
+
+// ─── GroupsSubModule ─────────────────────────────────────────────────────────
+function GroupsSubModule() {
+  const [groups, setGroups] = useState<string[]>(() => getGroups());
+  const [newGroup, setNewGroup] = useState("");
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
+
+  const saveGroups = (updated: string[]) => {
+    setGroups(updated);
+    localStorage.setItem("erp_fee_groups", JSON.stringify(updated));
+  };
+
+  const addGroup = () => {
+    if (!newGroup.trim()) return;
+    if (groups.includes(newGroup.trim())) {
+      toast.error("Group already exists");
+      return;
+    }
+    saveGroups([...groups, newGroup.trim()]);
+    setNewGroup("");
+    toast.success("Group added");
+  };
+
+  const startEdit = (i: number) => {
+    setEditIdx(i);
+    setEditVal(groups[i]);
+  };
+  const saveEdit = (i: number) => {
+    if (!editVal.trim()) return;
+    const updated = [...groups];
+    updated[i] = editVal.trim();
+    saveGroups(updated);
+    setEditIdx(null);
+    toast.success("Group updated");
+  };
+
+  const deleteGroup = (i: number) => {
+    saveGroups(groups.filter((_, idx) => idx !== i));
+    toast.success("Group deleted");
+  };
+
+  return (
+    <div
+      style={{
+        background: "#0d111c",
+        border: "1px solid #2d3748",
+        borderRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          background: "linear-gradient(135deg,#1e3a5f,#1565c0)",
+          borderRadius: "8px 8px 0 0",
+        }}
+        className="px-4 py-3"
+      >
+        <h3 className="text-white font-bold text-sm">Fee Groups Management</h3>
+        <p className="text-blue-200 text-xs mt-0.5">
+          Groups are used to categorize fee headings
+        </p>
+      </div>
+      <div className="p-4">
+        {/* Add form */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newGroup}
+            onChange={(e) => setNewGroup(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addGroup()}
+            placeholder="Enter new group name..."
+            className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-white text-xs outline-none focus:border-blue-400"
+            data-ocid="groups.name.input"
+          />
+          <button
+            type="button"
+            onClick={addGroup}
+            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs px-4 py-1.5 rounded font-medium transition"
+            data-ocid="groups.add.primary_button"
+          >
+            <Plus size={13} /> Add Group
+          </button>
+        </div>
+
+        {/* Groups list */}
+        <div className="rounded-lg overflow-hidden border border-gray-700">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: "#1a1f2e" }}>
+                <th className="text-left px-3 py-2 text-gray-400">#</th>
+                <th className="text-left px-3 py-2 text-gray-400">
+                  Group Name
+                </th>
+                <th className="text-left px-3 py-2 text-gray-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groups.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-3 py-6 text-center text-gray-500"
+                    data-ocid="groups.empty_state"
+                  >
+                    No groups added yet
+                  </td>
+                </tr>
+              ) : (
+                groups.map((g, i) => (
+                  <tr
+                    key={`grp-${g}`}
+                    style={{ background: i % 2 === 0 ? "#111827" : "#0d111c" }}
+                    data-ocid={`groups.item.${i + 1}`}
+                  >
+                    <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                    <td className="px-3 py-2">
+                      {editIdx === i ? (
+                        <input
+                          type="text"
+                          value={editVal}
+                          onChange={(e) => setEditVal(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && saveEdit(i)}
+                          className="bg-gray-800 border border-blue-500 rounded px-2 py-0.5 text-white text-xs outline-none w-48"
+                          data-ocid="groups.edit.input"
+                        />
+                      ) : (
+                        <span className="text-white font-medium">{g}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {editIdx === i ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => saveEdit(i)}
+                              className="text-[10px] bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition"
+                              data-ocid="groups.save.button"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditIdx(null)}
+                              className="text-[10px] bg-gray-700 hover:bg-gray-600 text-white px-2 py-0.5 rounded transition"
+                              data-ocid="groups.cancel.button"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(i)}
+                              className="text-blue-400 hover:text-blue-300 text-xs px-2 py-0.5 rounded border border-blue-500/30 hover:border-blue-400 transition"
+                              data-ocid="groups.edit_button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteGroup(i)}
+                              className="text-red-400 hover:text-red-300 text-xs px-2 py-0.5 rounded border border-red-500/30 hover:border-red-400 transition"
+                              data-ocid="groups.delete_button"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AccountsSubModule ────────────────────────────────────────────────────────
+function AccountsSubModule() {
+  const [accounts, setAccounts] = useState<string[]>(() => getAccounts());
+  const [newAccount, setNewAccount] = useState("");
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editVal, setEditVal] = useState("");
+
+  const saveAccounts = (updated: string[]) => {
+    setAccounts(updated);
+    localStorage.setItem("erp_fee_accounts", JSON.stringify(updated));
+  };
+
+  const addAccount = () => {
+    if (!newAccount.trim()) return;
+    if (accounts.includes(newAccount.trim())) {
+      toast.error("Account already exists");
+      return;
+    }
+    saveAccounts([...accounts, newAccount.trim()]);
+    setNewAccount("");
+    toast.success("Account added");
+  };
+
+  const startEdit = (i: number) => {
+    setEditIdx(i);
+    setEditVal(accounts[i]);
+  };
+  const saveEdit = (i: number) => {
+    if (!editVal.trim()) return;
+    const updated = [...accounts];
+    updated[i] = editVal.trim();
+    saveAccounts(updated);
+    setEditIdx(null);
+    toast.success("Account updated");
+  };
+
+  const deleteAccount = (i: number) => {
+    saveAccounts(accounts.filter((_, idx) => idx !== i));
+    toast.success("Account deleted");
+  };
+
+  // Compute account-wise fees summary
+  const accountSummary = (() => {
+    try {
+      const payments: PaymentRecord[] = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      );
+      const headings: FeeHeading[] = JSON.parse(
+        localStorage.getItem("erp_fee_master_headings") || "[]",
+      );
+      const result: Record<string, number> = {};
+      for (const acc of accounts) result[acc] = 0;
+      for (const payment of payments) {
+        for (const feeRow of payment.feeRows) {
+          if (!feeRow.checked) continue;
+          const heading = headings.find((h) => h.heading === feeRow.feeHead);
+          if (heading && accounts.includes(heading.account)) {
+            const rowTotal = payment.months.reduce(
+              (s, m) => s + (feeRow.months[m] || 0),
+              0,
+            );
+            result[heading.account] = (result[heading.account] || 0) + rowTotal;
+          }
+        }
+      }
+      return result;
+    } catch {
+      return {};
+    }
+  })();
+
+  return (
+    <div
+      style={{
+        background: "#0d111c",
+        border: "1px solid #2d3748",
+        borderRadius: 8,
+      }}
+    >
+      <div
+        style={{
+          background: "linear-gradient(135deg,#065f46,#047857)",
+          borderRadius: "8px 8px 0 0",
+        }}
+        className="px-4 py-3"
+      >
+        <h3 className="text-white font-bold text-sm">Accounts Management</h3>
+        <p className="text-green-200 text-xs mt-0.5">
+          Account name-wise fee collection summary
+        </p>
+      </div>
+      <div className="p-4">
+        {/* Add form */}
+        <div className="flex gap-2 mb-4">
+          <input
+            type="text"
+            value={newAccount}
+            onChange={(e) => setNewAccount(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addAccount()}
+            placeholder="Enter new account name..."
+            className="flex-1 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-white text-xs outline-none focus:border-green-400"
+            data-ocid="accounts.name.input"
+          />
+          <button
+            type="button"
+            onClick={addAccount}
+            className="flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-4 py-1.5 rounded font-medium transition"
+            data-ocid="accounts.add.primary_button"
+          >
+            <Plus size={13} /> Add Account
+          </button>
+        </div>
+
+        {/* Accounts list */}
+        <div className="rounded-lg overflow-hidden border border-gray-700 mb-5">
+          <table className="w-full text-xs">
+            <thead>
+              <tr style={{ background: "#1a1f2e" }}>
+                <th className="text-left px-3 py-2 text-gray-400">#</th>
+                <th className="text-left px-3 py-2 text-gray-400">
+                  Account Name
+                </th>
+                <th className="text-left px-3 py-2 text-gray-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {accounts.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={3}
+                    className="px-3 py-6 text-center text-gray-500"
+                    data-ocid="accounts.empty_state"
+                  >
+                    No accounts added yet
+                  </td>
+                </tr>
+              ) : (
+                accounts.map((a, i) => (
+                  <tr
+                    key={`acc-${a}`}
+                    style={{ background: i % 2 === 0 ? "#111827" : "#0d111c" }}
+                    data-ocid={`accounts.item.${i + 1}`}
+                  >
+                    <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                    <td className="px-3 py-2">
+                      {editIdx === i ? (
+                        <input
+                          type="text"
+                          value={editVal}
+                          onChange={(e) => setEditVal(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && saveEdit(i)}
+                          className="bg-gray-800 border border-green-500 rounded px-2 py-0.5 text-white text-xs outline-none w-48"
+                          data-ocid="accounts.edit.input"
+                        />
+                      ) : (
+                        <span className="text-white font-medium">{a}</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        {editIdx === i ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => saveEdit(i)}
+                              className="text-[10px] bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition"
+                              data-ocid="accounts.save.button"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditIdx(null)}
+                              className="text-[10px] bg-gray-700 hover:bg-gray-600 text-white px-2 py-0.5 rounded transition"
+                              data-ocid="accounts.cancel.button"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => startEdit(i)}
+                              className="text-blue-400 hover:text-blue-300 text-xs px-2 py-0.5 rounded border border-blue-500/30 transition"
+                              data-ocid="accounts.edit_button"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => deleteAccount(i)}
+                              className="text-red-400 hover:text-red-300 text-xs px-2 py-0.5 rounded border border-red-500/30 transition"
+                              data-ocid="accounts.delete_button"
+                            >
+                              Delete
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Account-wise Summary */}
+        <div>
+          <h4 className="text-white text-xs font-bold mb-2">
+            Account-wise Fees Received Summary
+          </h4>
+          <div className="rounded-lg overflow-hidden border border-gray-700">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: "#1a1f2e" }}>
+                  <th className="text-left px-3 py-2 text-gray-400">
+                    Account Name
+                  </th>
+                  <th className="text-right px-3 py-2 text-gray-400">
+                    Total Received (₹)
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {accounts.map((a, i) => (
+                  <tr
+                    key={`acc-${a}`}
+                    style={{ background: i % 2 === 0 ? "#111827" : "#0d111c" }}
+                  >
+                    <td className="px-3 py-2 text-white">{a}</td>
+                    <td
+                      className="px-3 py-2 text-right font-semibold"
+                      style={{
+                        color:
+                          (accountSummary[a] || 0) > 0 ? "#4ade80" : "#6b7280",
+                      }}
+                    >
+                      ₹{(accountSummary[a] || 0).toLocaleString("en-IN")}
+                    </td>
+                  </tr>
+                ))}
+                <tr
+                  style={{
+                    background: "#1a1f2e",
+                    borderTop: "2px solid #374151",
+                  }}
+                >
+                  <td className="px-3 py-2 text-gray-400 font-semibold">
+                    TOTAL
+                  </td>
+                  <td className="px-3 py-2 text-right font-bold text-green-400">
+                    ₹
+                    {accounts
+                      .reduce((s, a) => s + (accountSummary[a] || 0), 0)
+                      .toLocaleString("en-IN")}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

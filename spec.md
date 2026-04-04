@@ -1,73 +1,60 @@
-# School ERP India
+# SHUBH SCHOOL ERP
 
 ## Current State
-- Full School ERP with Fees, PromoteStudents, Academics, Timetable modules
-- PromoteStudents: archives session to `erp_session_archive_<session>` key, updates `erp_settings.session`, carries dues month-wise
-- Fees/CollectFees: save dialog shows Print or WhatsApp as separate buttons; Fee Register tab lists all receipts
-- Teacher Timetable (TeacherTimetable.tsx): wizard-based, periods have fixed durations from a start time + duration setting
-- Fee receipts: 4 templates including Bharati Format (105x145mm)
-- Role-based permissions system exists in `data/permissions.ts`
+- Header shows "School ERP" as the app name, session switcher dropdown exists but labeled generically
+- Configure Fees Plan has a "Choose Category" panel (non-functional, cluttering UI)
+- Student details modal (StudentDetailModal in Students.tsx) shows basic info but NO fees details, transport details, or discount sections
+- Dues Fees tab shows month-wise dues for a single student only (no class-level wizard, no print/export/reminder options)
+- GROUPS constant is hardcoded array in Fees.tsx with no CRUD management UI
+- ACCOUNTS constant is hardcoded array in Fees.tsx with no CRUD management UI
+- Months order in school year not explicitly enforced to start April and end March
+- No student photo shown when a student is selected anywhere (Collect Fees, Dues Fees, etc.)
+- Discount in student details not integrated with fees master (not calculated per month)
 
 ## Requested Changes (Diff)
 
 ### Add
-1. **Session Switcher** -- A session selector in the app (header or fees/student section) allowing user to switch between archived sessions (e.g., 2025-26, 2026-27) and view data read-only. Sessions are stored under `erp_session_archive_<session>` keys. Current session data is always in `erp_students`, `erp_fee_payments`, etc. When viewing an archived session, load data from the archive key instead. The switcher should be visible in relevant modules (Students, Fees, Attendance). Session list is built from all `erp_session_archive_*` keys plus the current active session from settings. Sessions should persist infinitely.
-
-2. **Per-Period Duration in Teacher Timetable** -- In the period config step of the Teacher Timetable wizard, allow each period to have its own individual duration (not a single global duration). Add an "Interval/Break" time between periods that the user can configure. The period timing preview should update live per-period based on individual durations and interval gaps.
-
-3. **Fee Receipt Save Dialog -- Both Buttons Simultaneously** -- When user presses Save in Collect Fees, the dialog should show BOTH "Print Receipt" AND "Send WhatsApp" as action buttons, not as an either/or choice. User can click both if they want. Currently only one can be chosen. Change to show both options clickable independently.
-
-4. **Fees Payment History on Receipt** -- Below the fee table in the Fees Receipt (Collect Fees page, not just the print modal), add a "Payment History" section showing all previous payments for the currently loaded student. Each row shows: Date, Receipt No., Months, Amount Paid, Payment Mode, and Received By (the logged-in user's name + role, e.g., "Rajesh Kumar (Admin)"). This history is pulled from `erp_fee_payments` filtered by the student's admNo.
-
-5. **Fee Register -- Student Detail Drill-Down** -- In the Fee Register tab, clicking/pointing on any row (or a detail icon) should open a drawer/modal showing full payment details for that student: all payment history, each receipt's breakdown, and edit/delete actions. Edit and delete are controlled by role permissions: only Super Admin can delete; Admin and Super Admin can edit. Permissions are checked from the current user's role stored in `erp_current_user` or `erp_auth`.
-
-6. **Edit/Delete in Fee Register (Role-Controlled)** -- Super Admin: can edit and delete any receipt. Admin: can edit but not delete. Others (Accountant, Teacher, etc.): view only. When editing a receipt, allow changing: payment mode, remarks, amount received, date. When deleting, show a confirmation dialog.
+1. **App name change**: "School ERP" → "SHUBH SCHOOL ERP" everywhere (Header text, title, sidebar brand)
+2. **Session label in header top-left**: Show "Current Session: 2025-26" (or active session from settings) as a visible label integrated with the session switcher — clicking shows the dropdown
+3. **Student photo verification**: When any student is selected (Collect Fees search, Dues Fees search, Student Details modal), show the student's photo (from their profile, fallback to initials avatar) prominently so staff can verify identity
+4. **Student Details — Fees/Transport/Discount tabs**: In the StudentDetailModal, add tabs:
+   - **Fees Details**: Show fees from fees master for the student's class, with monthly breakdown (April→March). Show each fee head, monthly amount, paid status, due amount, old due fees (carried forward from previous session with month-wise breakdown), and computed Net Payable Amount = (fees master amount × months) - discounts + old dues
+   - **Transport Details**: Show transport route/vehicle/pickup point assigned to the student from Transport module data
+   - **Discounts**: Show assigned discounts (from fees master discount records for this student). Discount calculated per month: if 100/month discount → 100 deducted per month, not a lump sum. Net payable amount updates accordingly.
+   - **Old Fees**: Show previous session dues (month-wise, which months are unpaid) pulled from erp_session_archive data, with total old balance added to net payable
+5. **Dues Fees wizard**: Replace the single-student search with a 2-step wizard:
+   - **Step 1 — Months**: Checkbox grid (April, May, June, July, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar) for user to select which months to check dues for
+   - **Step 2 — Classes**: Checkbox grid (Nursery, LKG, UKG, Class 1–12) for user to select which classes to include
+   - After selecting months + classes, show a dues report table: Student Name | Adm No | Class | Section | selected-month columns with due amounts | Total Due
+   - **Actions toolbar**: Print button (print dues report with student names and months), Excel Export (download as CSV/xlsx), Reminder Letter (print individual page per student with their dues — bulk print for multiple students), WhatsApp Reminder (simulate sending reminder to all parents whose fees are due, show a confirmation summary)
+6. **Group Name sub-module** under Fees: A "Groups" management panel where users can Add, Edit, Delete group names. These groups feed the GROUPS dropdown in Fees Master. Stored in localStorage key `erp_fee_groups`. Default groups: General, Transport, Sports, Lab.
+7. **Account sub-module** under Fees: An "Accounts" management panel where users can Add, Edit, Delete account names. Show account-wise received fees summary (total fees received per account name from erp_fee_payments). Stored in localStorage key `erp_fee_accounts`. Default accounts: Admission Fees, Tuition Fees, Computer, Vikas Shulk, Examination, TDS, old year.
+8. **Months order**: Ensure all month arrays/selectors throughout Fees and Dues start with April and end with March (Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar)
 
 ### Modify
-- **PromoteStudents**: Session data already archiving correctly. Ensure the session list in the new switcher reads all archive keys.
-- **Teacher Timetable period config**: Replace single-duration field with per-period individual duration fields + interval/break time field.
-- **Save dialog in CollectFees**: Both Print and WhatsApp buttons are independent -- clicking Print opens print modal, clicking WhatsApp opens WhatsApp send flow. Dialog stays open until user explicitly closes it (add a "Done" / Close button).
+1. **Configure Fees Plan**: Remove the entire "Choose Category" panel/section (the right-side grid with CATEGORIES checkboxes). Keep only Classes selection. Remove category from the saved plan data display.
+2. **Header brand**: Change "School ERP" text to "SHUBH SCHOOL ERP"
+3. **Session switcher**: Display "Current Session: [session]" as label text next to the Archive icon (not just the session value) so it's clear this is the current session indicator
+4. **GROUPS and ACCOUNTS**: Change from hardcoded constants to dynamic — read from localStorage `erp_fee_groups` and `erp_fee_accounts` so the new sub-modules feed these dropdowns live
+5. **Dues Fees tab**: Replace existing single-student flow with the new wizard (see Add #5 above)
 
 ### Remove
-- Nothing removed.
+1. "Choose Category" panel from Configure Fees Plan tab
+2. Categories column from the fee plans table display
 
 ## Implementation Plan
 
-1. **Session Switcher component** (`src/frontend/src/components/layout/SessionSwitcher.tsx`):
-   - Reads all localStorage keys starting with `erp_session_archive_` to build session list
-   - Adds current active session from `erp_settings.session`
-   - Stores selected viewing session in a React context or local state (passed down)
-   - When a non-current session is selected, shows a banner "Viewing archived session: 2025-26 (Read Only)"
-   - Integrate into Header.tsx as a dropdown next to the school name
-   - Relevant pages (Students, Fees) check the selected session and load from archive if not current
-
-2. **Per-Period Duration in TeacherTimetable.tsx**:
-   - In Step 2 (Period Config), replace `periodDuration` single field with an array `periodDurations[]` -- one duration input per period (e.g., P1: 45 min, P2: 30 min, etc.)
-   - Add `intervalMinutes` field for break/interval time between periods
-   - Period timing preview recalculates: P1 starts at `startTime`, ends at `startTime + periodDurations[0]`, P2 starts at `P1_end + intervalMinutes`, etc.
-   - Save these per-period durations so the generated timetable display shows accurate timing
-
-3. **Collect Fees Save Dialog** (`Fees.tsx`, `CollectFeesTab`):
-   - Change `showSaveDialog` modal to show both Print Receipt and Send WhatsApp as separate independent buttons
-   - Both can be clicked; state tracks which have been activated
-   - Add a "Close" or "Done" button to dismiss
-   - Receipt is already saved when dialog opens; Print/WhatsApp are post-save actions
-
-4. **Payment History section in CollectFees** (`Fees.tsx`):
-   - Below the fee grid / other charges section (when a student is loaded), render a `PaymentHistory` component
-   - Reads `erp_fee_payments` filtered by student admNo
-   - Shows table: Date | Receipt No. | Months | Amount | Mode | Received By
-   - `receivedBy` field: when saving a payment, store the logged-in user's name+role (read from `erp_current_user` or `erp_auth` localStorage)
-   - Update `PaymentRecord` interface to include `receivedBy: string`
-   - When saving a new payment, populate `receivedBy` from current user
-
-5. **Fee Register drill-down + edit/delete** (`Fees.tsx`, Fee Register tab):
-   - Each row gets a clickable details icon or entire row clickable
-   - Opens a modal/drawer: `FeeRegisterDetailModal` showing full student payment history
-   - Role check: read from `erp_current_user` to get role
-   - Super Admin: show Edit + Delete buttons
-   - Admin: show Edit button only
-   - Others: view only
-   - Edit modal: form to change paymentMode, remarks, receiptAmt, date -- saves back to `erp_fee_payments`
-   - Delete: confirmation dialog, removes from `erp_fee_payments`
-   - After edit/delete, refresh the register list
+1. **Header.tsx**: Change "School ERP" → "SHUBH SCHOOL ERP"; update session label to show "Current Session: X"
+2. **Fees.tsx**:
+   a. Change GROUPS and ACCOUNTS to read from localStorage dynamically (helper functions)
+   b. Remove Choose Category section from Configure Fees Plan tab
+   c. Remove Category column from fee plans table
+   d. Rewrite DuesFeesTab to wizard-based (months checkboxes + class checkboxes + report table + Print/Excel/Reminder Letter/WhatsApp Reminder actions)
+   e. Add GroupsSubModule component — CRUD panel for group names, saves to erp_fee_groups
+   f. Add AccountsSubModule component — CRUD panel for account names + account-wise fees summary, saves to erp_fee_accounts
+   g. Add new tabs in Fees page navigation for "Groups" and "Accounts"
+   h. Ensure all month arrays start April and end March
+3. **Students.tsx**:
+   a. StudentDetailModal: Add Fees Details, Transport Details, Discounts, Old Fees tabs with integrated data
+   b. Show student photo (from student.photo field or initials avatar) in all student selection contexts
+4. **Collect Fees (inside Fees.tsx)**: When student is selected from dynamic search dropdown, show student photo/avatar in the student info panel for identity verification

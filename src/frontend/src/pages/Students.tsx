@@ -1310,6 +1310,217 @@ function StudentDetailModal({
   onEdit: () => void;
   onDiscontinue: () => void;
 }) {
+  const [detailTab, setDetailTab] = useState<
+    "info" | "fees" | "transport" | "discounts" | "oldfees"
+  >("info");
+
+  const SCHOOL_MONTHS = [
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+    "Jan",
+    "Feb",
+    "Mar",
+  ];
+
+  // Load fee data for this student
+  const feesData = (() => {
+    try {
+      const plans = JSON.parse(
+        localStorage.getItem("erp_fee_plans") || "[]",
+      ) as Array<{
+        className: string;
+        feesHead: string;
+        value: number;
+        category?: string;
+      }>;
+      const payments = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      ) as Array<{
+        admNo: string;
+        months: string[];
+        feeRows: Array<{
+          feeHead: string;
+          months: Record<string, number>;
+          checked: boolean;
+        }>;
+        receiptAmt: number;
+      }>;
+      const studentPayments = payments.filter((p) => p.admNo === student.admNo);
+      const classPlans = plans.filter((p) => p.className === student.className);
+      const feeHeads =
+        classPlans.length > 0
+          ? [...new Set(classPlans.map((p) => p.feesHead))]
+          : ["Tuition Fee", "Exam Fee", "Library Fee", "Sports Fee"];
+      return feeHeads.map((head) => {
+        const planRow = classPlans.find((p) => p.feesHead === head);
+        const monthlyAmt =
+          planRow?.value ||
+          (head === "Tuition Fee"
+            ? 1500
+            : head === "Exam Fee"
+              ? 200
+              : head === "Library Fee"
+                ? 100
+                : 150);
+        const monthStatus: Record<string, "paid" | "due"> = {};
+        for (const m of SCHOOL_MONTHS) {
+          const paid = studentPayments.some(
+            (p) =>
+              p.months.includes(m) &&
+              p.feeRows.some((r) => r.feeHead === head && r.checked),
+          );
+          monthStatus[m] = paid ? "paid" : "due";
+        }
+        const annualTotal = SCHOOL_MONTHS.length * monthlyAmt;
+        return { head, monthlyAmt, monthStatus, annualTotal };
+      });
+    } catch {
+      return [];
+    }
+  })();
+
+  const totalFees = feesData.reduce((s, r) => s + r.annualTotal, 0);
+  const paidFees = feesData.reduce((s, r) => {
+    return (
+      s +
+      SCHOOL_MONTHS.filter((m) => r.monthStatus[m] === "paid").length *
+        r.monthlyAmt
+    );
+  }, 0);
+
+  // Load discounts for student
+  const discountsData = (() => {
+    try {
+      const discounts = JSON.parse(
+        localStorage.getItem("erp_discounts") || "[]",
+      ) as Array<{
+        studentId?: string;
+        admNo?: string;
+        name: string;
+        monthlyAmount: number;
+        months?: string[];
+      }>;
+      const studentDiscounts = discounts.filter(
+        (d) => d.admNo === student.admNo || d.studentId === String(student.id),
+      );
+      if (studentDiscounts.length === 0) {
+        // Check fee plans for discounts
+        // const _plans = JSON.parse(localStorage.getItem("erp_fee_plans") || "[]");
+        return [];
+      }
+      return studentDiscounts.map((d) => ({
+        name: d.name,
+        monthlyAmount: d.monthlyAmount,
+        appliedMonths: d.months || SCHOOL_MONTHS,
+        total: d.monthlyAmount * (d.months?.length || SCHOOL_MONTHS.length),
+      }));
+    } catch {
+      return [];
+    }
+  })();
+
+  const totalDiscount = discountsData.reduce((s, d) => s + d.total, 0);
+
+  // Load transport data
+  const transportData = (() => {
+    try {
+      const routes = JSON.parse(
+        localStorage.getItem("erp_transport_routes") || "[]",
+      ) as Array<{
+        id: number;
+        name: string;
+        vehicle?: string;
+        fee?: number;
+        stops?: Array<{ name: string }>;
+      }>;
+      if (!student.route || student.route === "N.A.") return null;
+      const route = routes.find(
+        (r) => r.name === student.route || r.id === Number(student.route),
+      );
+      if (!route)
+        return {
+          route: student.route,
+          vehicle: "—",
+          pickup: "—",
+          fee: 0,
+          assigned: "—",
+        };
+      const pickup = route.stops?.[0]?.name || "—";
+      return {
+        route: route.name,
+        vehicle: route.vehicle || "—",
+        pickup,
+        fee: route.fee || 0,
+        assigned: student.admissionDate || "—",
+      };
+    } catch {
+      return null;
+    }
+  })();
+
+  // Load old fees from session archive
+  const oldFeesData = (() => {
+    try {
+      const result: Array<{
+        session: string;
+        month: string;
+        feeHead: string;
+        amount: number;
+      }> = [];
+      if (student.prevSessionDues && student.prevSessionDues.length > 0) {
+        for (const d of student.prevSessionDues) {
+          result.push({
+            session: d.sessionLabel,
+            month: d.month,
+            feeHead: "Total Fees",
+            amount: d.amount,
+          });
+        }
+      }
+      // Also check session archives
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("erp_session_archive_")) {
+          const archive = JSON.parse(localStorage.getItem(key) || "{}");
+          const label =
+            archive.sessionLabel || key.replace("erp_session_archive_", "");
+          if (archive.studentDues?.[student.admNo]) {
+            for (const due of archive.studentDues?.[student.admNo] || []) {
+              result.push({
+                session: label,
+                month: due.month,
+                feeHead: due.feeHead || "Fees",
+                amount: due.amount,
+              });
+            }
+          }
+        }
+      }
+      return result;
+    } catch {
+      return [];
+    }
+  })();
+
+  const totalOldBalance =
+    oldFeesData.reduce((s, r) => s + r.amount, 0) + (student.oldBalance || 0);
+  const netPayable = totalFees - totalDiscount + totalOldBalance - paidFees;
+
+  const detailTabs = [
+    { id: "info" as const, label: "Info" },
+    { id: "fees" as const, label: "💰 Fees Details" },
+    { id: "transport" as const, label: "🚌 Transport" },
+    { id: "discounts" as const, label: "🏷 Discounts" },
+    { id: "oldfees" as const, label: "📋 Old Fees" },
+  ];
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 pt-8 pb-8"
@@ -1317,7 +1528,7 @@ function StudentDetailModal({
       data-ocid="student.modal"
     >
       <div
-        className="relative w-full max-w-3xl rounded-xl shadow-2xl"
+        className="relative w-full max-w-4xl rounded-xl shadow-2xl"
         style={{ background: "#1a1f2e", border: "1px solid #374151" }}
       >
         {/* Header */}
@@ -1326,16 +1537,30 @@ function StudentDetailModal({
           style={{ background: "#0f172a", borderBottom: "1px solid #374151" }}
         >
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
-              style={{ background: "#1e3a5f" }}
-            >
-              {student.name.charAt(0).toUpperCase()}
+            {/* Student Photo */}
+            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-blue-500/40 flex-shrink-0">
+              {(student as any).photo ? (
+                <img
+                  src={(student as any).photo}
+                  alt={student.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div
+                  className="w-full h-full flex items-center justify-center text-white font-bold text-lg"
+                  style={{ background: "#1e3a5f" }}
+                >
+                  {student.name.charAt(0).toUpperCase()}
+                </div>
+              )}
             </div>
             <div>
               <h2 className="text-white font-bold text-base">{student.name}</h2>
               <span className="text-blue-400 text-xs font-medium">
                 {student.admNo}
+              </span>
+              <span className="text-gray-400 text-xs ml-2">
+                {student.className} {student.section}
               </span>
             </div>
           </div>
@@ -1369,89 +1594,581 @@ function StudentDetailModal({
           </div>
         </div>
 
-        {/* Body */}
-        <div className="p-6 grid grid-cols-2 gap-4">
-          {/* Status badge */}
-          <div className="col-span-2">
-            <span
-              className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                student.status === "Active"
-                  ? "bg-green-900/50 text-green-400"
-                  : student.status === "Discontinued"
-                    ? "bg-red-900/50 text-red-400"
-                    : "bg-yellow-900/50 text-yellow-400"
-              }`}
+        {/* Tab Navigation */}
+        <div
+          className="flex gap-1 px-4 pt-3 pb-0 border-b border-gray-700"
+          style={{ background: "#0f172a" }}
+        >
+          {detailTabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setDetailTab(t.id)}
+              data-ocid={`student.${t.id}.tab`}
+              className={`px-3 py-1.5 text-xs font-medium rounded-t border-b-2 transition ${detailTab === t.id ? "border-blue-400 text-blue-300 bg-blue-900/20" : "border-transparent text-gray-400 hover:text-white"}`}
             >
-              {student.status}
-            </span>
-            {student.status === "Discontinued" && student.leavingDate && (
-              <span className="ml-3 text-gray-400 text-xs">
-                Left on: {student.leavingDate} | Reason:{" "}
-                {student.leavingReason || "—"}
-              </span>
-            )}
-          </div>
+              {t.label}
+            </button>
+          ))}
+        </div>
 
-          <DetailSection title="Academic Details">
-            <DetailRow label="Adm. No." value={student.admNo} />
-            <DetailRow label="Class" value={student.className} />
-            <DetailRow label="Section" value={student.section} />
-            <DetailRow label="Roll No." value={student.rollNo} />
-            <DetailRow
-              label="Admission Date"
-              value={student.admissionDate || "—"}
-            />
-            <DetailRow label="Sch. No." value={student.schNo || "—"} />
-            <DetailRow label="SR No." value={student.srNo || "—"} />
-            <DetailRow
-              label="Old Balance"
-              value={
-                student.oldBalance
-                  ? `₹${student.oldBalance.toLocaleString("en-IN")}`
-                  : "₹0"
-              }
-              valueColor={student.oldBalance > 0 ? "#f87171" : undefined}
-            />
-          </DetailSection>
+        {/* Body */}
+        <div className="p-4">
+          {/* INFO TAB */}
+          {detailTab === "info" && (
+            <div>
+              <div className="mb-3">
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                    student.status === "Active"
+                      ? "bg-green-900/50 text-green-400"
+                      : student.status === "Discontinued"
+                        ? "bg-red-900/50 text-red-400"
+                        : "bg-yellow-900/50 text-yellow-400"
+                  }`}
+                >
+                  {student.status}
+                </span>
+                {student.status === "Discontinued" && student.leavingDate && (
+                  <span className="ml-3 text-gray-400 text-xs">
+                    Left on: {student.leavingDate} | Reason:{" "}
+                    {student.leavingReason || "—"}
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <DetailSection title="Academic Details">
+                  <DetailRow label="Adm. No." value={student.admNo} />
+                  <DetailRow label="Class" value={student.className} />
+                  <DetailRow label="Section" value={student.section} />
+                  <DetailRow label="Roll No." value={student.rollNo} />
+                  <DetailRow
+                    label="Admission Date"
+                    value={student.admissionDate || "—"}
+                  />
+                  <DetailRow label="Sch. No." value={student.schNo || "—"} />
+                  <DetailRow label="SR No." value={student.srNo || "—"} />
+                  <DetailRow
+                    label="Old Balance"
+                    value={
+                      student.oldBalance
+                        ? `₹${student.oldBalance.toLocaleString("en-IN")}`
+                        : "₹0"
+                    }
+                    valueColor={student.oldBalance > 0 ? "#f87171" : undefined}
+                  />
+                </DetailSection>
+                <DetailSection title="Personal Details">
+                  <DetailRow label="Date of Birth" value={student.dob || "—"} />
+                  <DetailRow label="Gender" value={student.gender || "—"} />
+                  <DetailRow
+                    label="Blood Group"
+                    value={student.bloodGroup || "—"}
+                  />
+                  <DetailRow label="Category" value={student.category || "—"} />
+                  <DetailRow label="Religion" value={student.religion || "—"} />
+                  <DetailRow
+                    label="Aadhaar No."
+                    value={student.aadharNo || "—"}
+                  />
+                  <DetailRow label="PEN No." value={student.penNo || "—"} />
+                  <DetailRow label="APAAR No." value={student.apaarNo || "—"} />
+                </DetailSection>
+                <DetailSection title="Parent / Guardian">
+                  <DetailRow
+                    label="Father Name"
+                    value={student.fatherName || "—"}
+                  />
+                  <DetailRow
+                    label="Mother Name"
+                    value={student.motherName || "—"}
+                  />
+                  <DetailRow
+                    label="Contact No."
+                    value={student.contact || "—"}
+                  />
+                  <DetailRow
+                    label="Guardian Name"
+                    value={student.guardianName || "—"}
+                  />
+                  <DetailRow
+                    label="Guardian Phone"
+                    value={student.guardianPhone || "—"}
+                  />
+                </DetailSection>
+                <DetailSection title="Transport &amp; Other">
+                  <DetailRow label="Route" value={student.route || "N.A."} />
+                  <DetailRow label="Address" value={student.address || "—"} />
+                  <DetailRow
+                    label="Prev. School"
+                    value={student.prevSchoolName || "—"}
+                  />
+                  <DetailRow
+                    label="Prev. Class"
+                    value={student.prevSchoolClass || "—"}
+                  />
+                  <DetailRow
+                    label="TC No."
+                    value={student.prevSchoolTcNo || "—"}
+                  />
+                </DetailSection>
+              </div>
+            </div>
+          )}
 
-          <DetailSection title="Personal Details">
-            <DetailRow label="Date of Birth" value={student.dob || "—"} />
-            <DetailRow label="Gender" value={student.gender || "—"} />
-            <DetailRow label="Blood Group" value={student.bloodGroup || "—"} />
-            <DetailRow label="Category" value={student.category || "—"} />
-            <DetailRow label="Religion" value={student.religion || "—"} />
-            <DetailRow label="Aadhaar No." value={student.aadharNo || "—"} />
-            <DetailRow label="PEN No." value={student.penNo || "—"} />
-            <DetailRow label="APAAR No." value={student.apaarNo || "—"} />
-          </DetailSection>
+          {/* FEES DETAILS TAB */}
+          {detailTab === "fees" && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white text-sm font-semibold">
+                  Fee Details — {student.className}
+                </h3>
+                <div className="flex gap-4 text-xs">
+                  <span className="text-gray-400">
+                    Net Payable:{" "}
+                    <span className="text-red-400 font-bold">
+                      ₹{netPayable.toLocaleString("en-IN")}
+                    </span>
+                  </span>
+                  <span className="text-gray-400">
+                    Ledger Bal:{" "}
+                    <span className="text-yellow-400 font-bold">
+                      ₹
+                      {(totalFees - paidFees + totalOldBalance).toLocaleString(
+                        "en-IN",
+                      )}
+                    </span>
+                  </span>
+                </div>
+              </div>
+              {feesData.length === 0 ? (
+                <div
+                  className="text-center text-gray-500 py-8"
+                  data-ocid="student.fees.empty_state"
+                >
+                  No fee plan configured for {student.className}
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-lg border border-gray-700">
+                  <table
+                    className="w-full text-xs"
+                    style={{ borderCollapse: "collapse", minWidth: 900 }}
+                  >
+                    <thead>
+                      <tr style={{ background: "#1a1f2e" }}>
+                        <th
+                          className="text-left px-3 py-2 text-gray-400 font-medium sticky left-0 bg-gray-900"
+                          style={{ minWidth: 130 }}
+                        >
+                          Fee Head
+                        </th>
+                        {SCHOOL_MONTHS.map((m) => (
+                          <th
+                            key={m}
+                            className="px-2 py-2 text-gray-400 font-medium text-center"
+                            style={{ minWidth: 55 }}
+                          >
+                            {m}
+                          </th>
+                        ))}
+                        <th
+                          className="px-3 py-2 text-gray-400 font-medium text-right"
+                          style={{ minWidth: 80 }}
+                        >
+                          Annual
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {feesData.map((row, i) => (
+                        <tr
+                          key={row.head}
+                          style={{
+                            background: i % 2 === 0 ? "#111827" : "#0d111c",
+                            borderBottom: "1px solid #1f2937",
+                          }}
+                        >
+                          <td
+                            className="px-3 py-2 text-white font-medium sticky left-0"
+                            style={{
+                              background: i % 2 === 0 ? "#111827" : "#0d111c",
+                            }}
+                          >
+                            {row.head}
+                          </td>
+                          {SCHOOL_MONTHS.map((m) => (
+                            <td key={m} className="px-2 py-2 text-center">
+                              {row.monthStatus[m] === "paid" ? (
+                                <span className="text-green-400 text-[10px] font-medium">
+                                  ✓
+                                </span>
+                              ) : (
+                                <span className="text-red-400 text-[10px]">
+                                  ₹{row.monthlyAmt.toLocaleString("en-IN")}
+                                </span>
+                              )}
+                            </td>
+                          ))}
+                          <td className="px-3 py-2 text-right text-gray-300 font-semibold">
+                            ₹{row.annualTotal.toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr
+                        style={{
+                          background: "#1a1f2e",
+                          borderTop: "2px solid #374151",
+                        }}
+                      >
+                        <td className="px-3 py-2 text-gray-400 font-semibold sticky left-0 bg-gray-800">
+                          TOTAL
+                        </td>
+                        {SCHOOL_MONTHS.map((m) => {
+                          const monthTotal = feesData.reduce(
+                            (s, r) =>
+                              s +
+                              (r.monthStatus[m] === "due" ? r.monthlyAmt : 0),
+                            0,
+                          );
+                          return (
+                            <td
+                              key={m}
+                              className="px-2 py-2 text-center font-bold"
+                              style={{
+                                color: monthTotal > 0 ? "#f87171" : "#4ade80",
+                                fontSize: 10,
+                              }}
+                            >
+                              {monthTotal > 0
+                                ? `₹${monthTotal.toLocaleString("en-IN")}`
+                                : "✓"}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-2 text-right font-bold text-white">
+                          ₹{totalFees.toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                      <tr style={{ background: "#0f172a" }}>
+                        <td colSpan={14} className="px-3 py-2">
+                          <div className="flex items-center gap-6 text-xs">
+                            <span className="text-gray-400">
+                              Total Fees:{" "}
+                              <span className="text-white font-semibold">
+                                ₹{totalFees.toLocaleString("en-IN")}
+                              </span>
+                            </span>
+                            <span className="text-gray-400">
+                              Discount:{" "}
+                              <span className="text-green-400 font-semibold">
+                                -₹{totalDiscount.toLocaleString("en-IN")}
+                              </span>
+                            </span>
+                            <span className="text-gray-400">
+                              Old Balance:{" "}
+                              <span className="text-red-400 font-semibold">
+                                +₹{totalOldBalance.toLocaleString("en-IN")}
+                              </span>
+                            </span>
+                            <span className="text-gray-400">
+                              Paid:{" "}
+                              <span className="text-green-400 font-semibold">
+                                -₹{paidFees.toLocaleString("en-IN")}
+                              </span>
+                            </span>
+                            <span className="text-gray-400 border-l border-gray-700 pl-4">
+                              Net Payable:{" "}
+                              <span className="text-red-400 font-bold text-sm">
+                                ₹{netPayable.toLocaleString("en-IN")}
+                              </span>
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
-          <DetailSection title="Parent / Guardian">
-            <DetailRow label="Father Name" value={student.fatherName || "—"} />
-            <DetailRow label="Mother Name" value={student.motherName || "—"} />
-            <DetailRow label="Contact No." value={student.contact || "—"} />
-            <DetailRow
-              label="Guardian Name"
-              value={student.guardianName || "—"}
-            />
-            <DetailRow
-              label="Guardian Phone"
-              value={student.guardianPhone || "—"}
-            />
-          </DetailSection>
+          {/* TRANSPORT TAB */}
+          {detailTab === "transport" && (
+            <div>
+              <h3 className="text-white text-sm font-semibold mb-3">
+                Transport Details
+              </h3>
+              {!transportData ? (
+                <div
+                  className="text-center text-gray-500 py-8 rounded-lg border border-dashed border-gray-700"
+                  data-ocid="student.transport.empty_state"
+                >
+                  <div className="text-3xl mb-2">🚌</div>
+                  <div>No transport assigned for this student</div>
+                </div>
+              ) : (
+                <div className="rounded-lg overflow-hidden border border-gray-700">
+                  <table className="w-full text-xs">
+                    <tbody>
+                      {[
+                        { label: "Route Name", value: transportData.route },
+                        { label: "Vehicle No.", value: transportData.vehicle },
+                        { label: "Pickup Point", value: transportData.pickup },
+                        {
+                          label: "Transport Fee",
+                          value:
+                            transportData.fee > 0
+                              ? `₹${transportData.fee.toLocaleString("en-IN")}/month`
+                              : "—",
+                        },
+                        {
+                          label: "Assigned Date",
+                          value: transportData.assigned,
+                        },
+                      ].map(({ label, value }, i) => (
+                        <tr
+                          key={label}
+                          style={{
+                            background: i % 2 === 0 ? "#111827" : "#0d111c",
+                            borderBottom: "1px solid #1f2937",
+                          }}
+                        >
+                          <td className="px-4 py-2.5 text-gray-400 font-medium w-40">
+                            {label}
+                          </td>
+                          <td className="px-4 py-2.5 text-white">{value}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
 
-          <DetailSection title="Transport &amp; Other">
-            <DetailRow label="Route" value={student.route || "N.A."} />
-            <DetailRow label="Address" value={student.address || "—"} />
-            <DetailRow
-              label="Prev. School"
-              value={student.prevSchoolName || "—"}
-            />
-            <DetailRow
-              label="Prev. Class"
-              value={student.prevSchoolClass || "—"}
-            />
-            <DetailRow label="TC No." value={student.prevSchoolTcNo || "—"} />
-          </DetailSection>
+          {/* DISCOUNTS TAB */}
+          {detailTab === "discounts" && (
+            <div>
+              <h3 className="text-white text-sm font-semibold mb-3">
+                Discounts
+              </h3>
+              <p className="text-gray-500 text-xs mb-3">
+                Discounts are calculated per month — ₹100/month discount = ₹100
+                deducted each month
+              </p>
+              {discountsData.length === 0 ? (
+                <div
+                  className="text-center text-gray-500 py-8 rounded-lg border border-dashed border-gray-700"
+                  data-ocid="student.discounts.empty_state"
+                >
+                  <div className="text-3xl mb-2">🏷</div>
+                  <div>No discounts assigned for this student</div>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg overflow-hidden border border-gray-700 mb-4">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: "#1a1f2e" }}>
+                          <th className="text-left px-3 py-2 text-gray-400">
+                            Discount Name
+                          </th>
+                          <th className="text-right px-3 py-2 text-gray-400">
+                            Monthly Amount
+                          </th>
+                          <th className="text-right px-3 py-2 text-gray-400">
+                            Applied Months
+                          </th>
+                          <th className="text-right px-3 py-2 text-gray-400">
+                            Total Discount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {discountsData.map((d, i) => (
+                          <tr
+                            key={`discount-${d.name}-${i}`}
+                            style={{
+                              background: i % 2 === 0 ? "#111827" : "#0d111c",
+                              borderBottom: "1px solid #1f2937",
+                            }}
+                          >
+                            <td className="px-3 py-2 text-white">{d.name}</td>
+                            <td className="px-3 py-2 text-right text-green-400">
+                              ₹{d.monthlyAmount.toLocaleString("en-IN")}/mo
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-300">
+                              {d.appliedMonths.length} months
+                            </td>
+                            <td className="px-3 py-2 text-right font-bold text-green-400">
+                              ₹{d.total.toLocaleString("en-IN")}
+                            </td>
+                          </tr>
+                        ))}
+                        <tr
+                          style={{
+                            background: "#1a1f2e",
+                            borderTop: "2px solid #374151",
+                          }}
+                        >
+                          <td
+                            colSpan={3}
+                            className="px-3 py-2 text-right text-gray-400 font-semibold"
+                          >
+                            Total Discount
+                          </td>
+                          <td className="px-3 py-2 text-right font-bold text-green-400">
+                            ₹{totalDiscount.toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div
+                    className="text-xs text-gray-400 p-3 rounded-lg"
+                    style={{
+                      background: "#1a1f2e",
+                      border: "1px solid #374151",
+                    }}
+                  >
+                    Net Payable after discount:{" "}
+                    <span className="text-red-400 font-bold">
+                      ₹
+                      {(
+                        totalFees -
+                        totalDiscount +
+                        totalOldBalance -
+                        paidFees
+                      ).toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* OLD FEES TAB */}
+          {detailTab === "oldfees" && (
+            <div>
+              <h3 className="text-white text-sm font-semibold mb-3">
+                Old / Previous Session Dues
+              </h3>
+              {oldFeesData.length === 0 && (student.oldBalance || 0) === 0 ? (
+                <div
+                  className="text-center text-gray-500 py-8 rounded-lg border border-dashed border-gray-700"
+                  data-ocid="student.oldfees.empty_state"
+                >
+                  <div className="text-3xl mb-2">✅</div>
+                  <div>No old dues found for this student</div>
+                </div>
+              ) : (
+                <>
+                  {(student.oldBalance || 0) > 0 && (
+                    <div
+                      className="flex items-center gap-3 mb-3 px-3 py-2 rounded-lg"
+                      style={{
+                        background: "#1a1f2e",
+                        border: "1px solid #374151",
+                      }}
+                    >
+                      <span className="text-yellow-400 font-bold">
+                        Old Balance: ₹
+                        {(student.oldBalance || 0).toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                  )}
+                  {oldFeesData.length > 0 && (
+                    <div className="rounded-lg overflow-hidden border border-gray-700 mb-3">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr style={{ background: "#1a1f2e" }}>
+                            <th className="text-left px-3 py-2 text-gray-400">
+                              Session
+                            </th>
+                            <th className="text-left px-3 py-2 text-gray-400">
+                              Month
+                            </th>
+                            <th className="text-left px-3 py-2 text-gray-400">
+                              Fee Head
+                            </th>
+                            <th className="text-right px-3 py-2 text-gray-400">
+                              Amount Due
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {oldFeesData.map((d, i) => (
+                            <tr
+                              key={`${d.session}-${d.month}-${i}`}
+                              style={{
+                                background: i % 2 === 0 ? "#111827" : "#0d111c",
+                                borderBottom: "1px solid #1f2937",
+                              }}
+                              data-ocid={`student.oldfees.item.${i + 1}`}
+                            >
+                              <td className="px-3 py-2">
+                                <span
+                                  className="text-[10px] px-2 py-0.5 rounded-full"
+                                  style={{
+                                    background: "#7c3aed20",
+                                    color: "#a78bfa",
+                                  }}
+                                >
+                                  {d.session}
+                                </span>
+                              </td>
+                              <td className="px-3 py-2 text-white">
+                                {d.month}
+                              </td>
+                              <td className="px-3 py-2 text-gray-300">
+                                {d.feeHead}
+                              </td>
+                              <td className="px-3 py-2 text-right text-red-400 font-semibold">
+                                ₹{d.amount.toLocaleString("en-IN")}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr
+                            style={{
+                              background: "#1a1f2e",
+                              borderTop: "2px solid #374151",
+                            }}
+                          >
+                            <td
+                              colSpan={3}
+                              className="px-3 py-2 text-right text-gray-400 font-semibold"
+                            >
+                              Total Old Balance
+                            </td>
+                            <td className="px-3 py-2 text-right font-bold text-red-400">
+                              ₹{totalOldBalance.toLocaleString("en-IN")}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                  <div
+                    className="text-xs text-gray-400 p-3 rounded-lg"
+                    style={{
+                      background: "#1a1f2e",
+                      border: "1px solid #374151",
+                    }}
+                  >
+                    This old balance of{" "}
+                    <span className="text-red-400 font-bold">
+                      ₹{totalOldBalance.toLocaleString("en-IN")}
+                    </span>{" "}
+                    is included in the Net Payable calculation.
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
