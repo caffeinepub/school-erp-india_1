@@ -173,7 +173,7 @@ const navModules: NavModule[] = [
     permissionModule: "Academics",
     children: [
       { label: "Class Timetable", path: "/academics" },
-      { label: "Teachers Timetable", path: "/academics" },
+      { label: "Teachers Timetable", path: "/teacher-timetable" },
       { label: "Assign Class Teacher", path: "/academics" },
       { label: "Promote Students", path: "/academics" },
       { label: "Subjects", path: "/academics" },

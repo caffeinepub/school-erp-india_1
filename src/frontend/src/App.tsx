@@ -19,6 +19,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Students } from "./pages/Students";
+import { TeacherTimetable } from "./pages/TeacherTimetable";
 import { Transport } from "./pages/Transport";
 import { WhatsApp } from "./pages/WhatsApp";
 import { seedDemoDataIfEmpty } from "./utils/demoData";
@@ -84,6 +85,7 @@ function AppInner() {
     if (path === "/homework") return <Homework />;
     if (path === "/settings") return <Settings />;
     if (path === "/alumni") return <Alumni />;
+    if (path === "/teacher-timetable") return <TeacherTimetable />;
     return <Dashboard navigate={navigate} />;
   };
 
