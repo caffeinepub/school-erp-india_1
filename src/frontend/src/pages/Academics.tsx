@@ -192,6 +192,22 @@ interface TimetableEntry {
   section: string;
 }
 
+interface ClassTeacherRecord {
+  id: string;
+  classSection: string;
+  teacherName: string;
+  teacherId: string;
+  subjects: string[];
+  classRangeFrom: string;
+  classRangeTo: string;
+}
+
+interface StaffRecord {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
+
 function loadFromStorage<T>(key: string, fallback: T): T {
   try {
     return JSON.parse(localStorage.getItem(key) || "null") ?? fallback;
@@ -202,7 +218,7 @@ function loadFromStorage<T>(key: string, fallback: T): T {
 
 export function Academics() {
   const [tab, setTab] = useState<
-    "classes" | "subjects" | "timetable" | "syllabus"
+    "classes" | "subjects" | "timetable" | "syllabus" | "classteachers"
   >("classes");
 
   // Classes
@@ -265,7 +281,6 @@ export function Academics() {
   useEffect(() => {
     localStorage.setItem("erp_syllabus", JSON.stringify(syllabus));
   }, [syllabus]);
-
   const saveClass = () => {
     if (!classForm.name.trim()) return;
     const secs = classForm.sections
@@ -372,6 +387,94 @@ export function Academics() {
       ? Math.round((completedCount / filteredSyllabus.length) * 100)
       : 0;
 
+  // Class Teachers
+  const [classTeachers, setClassTeachers] = useState<ClassTeacherRecord[]>(() =>
+    loadFromStorage("erp_class_teachers", []),
+  );
+  const [showCtModal, setShowCtModal] = useState(false);
+  const [editCtSection, setEditCtSection] = useState<string | null>(null);
+  const [ctForm, setCtForm] = useState({
+    teacherName: "",
+    teacherId: "",
+    subjects: "",
+    classRangeFrom: "",
+    classRangeTo: "",
+  });
+  const [ctError, setCtError] = useState("");
+
+  const allClassSections: string[] = [];
+  for (const c of classes) {
+    for (const s of c.sections) {
+      allClassSections.push(`${c.name}-${s}`);
+    }
+  }
+
+  useEffect(() => {
+    localStorage.setItem("erp_class_teachers", JSON.stringify(classTeachers));
+  }, [classTeachers]);
+
+  const loadStaff = (): StaffRecord[] => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("erp_staff") || "[]",
+      ) as StaffRecord[];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveClassTeacher = () => {
+    if (!ctForm.teacherName.trim() || !editCtSection) return;
+    setCtError("");
+    const existing = classTeachers.find(
+      (ct) => ct.classSection === editCtSection,
+    );
+    if (existing && existing.teacherName !== ctForm.teacherName) {
+      setCtError(
+        `Class ${editCtSection} already has ${existing.teacherName} as class teacher. Please remove the existing assignment first.`,
+      );
+      return;
+    }
+    const subjectsList = ctForm.subjects
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const updated: ClassTeacherRecord = {
+      id: existing?.id || Date.now().toString(),
+      classSection: editCtSection,
+      teacherName: ctForm.teacherName,
+      teacherId: ctForm.teacherId || ctForm.teacherName,
+      subjects: subjectsList,
+      classRangeFrom: ctForm.classRangeFrom,
+      classRangeTo: ctForm.classRangeTo,
+    };
+    setClassTeachers((prev) => {
+      const without = prev.filter((ct) => ct.classSection !== editCtSection);
+      return [...without, updated];
+    });
+    localStorage.setItem(
+      "erp_class_teachers",
+      JSON.stringify([
+        ...classTeachers.filter((ct) => ct.classSection !== editCtSection),
+        updated,
+      ]),
+    );
+    setShowCtModal(false);
+    setCtError("");
+    toast.success("Class teacher assigned");
+  };
+
+  const deleteClassTeacher = (classSection: string) => {
+    setClassTeachers((prev) =>
+      prev.filter((ct) => ct.classSection !== classSection),
+    );
+    const updated = classTeachers.filter(
+      (ct) => ct.classSection !== classSection,
+    );
+    localStorage.setItem("erp_class_teachers", JSON.stringify(updated));
+    toast.success("Assignment removed");
+  };
+
   const ttGrid = (day: string) => {
     return PERIODS.map((period) => {
       const entry = timetable.find(
@@ -390,6 +493,7 @@ export function Academics() {
     { key: "subjects", label: "Subjects" },
     { key: "timetable", label: "Timetable" },
     { key: "syllabus", label: "Syllabus" },
+    { key: "classteachers", label: "👩‍🏫 Class Teachers" },
   ] as const;
 
   return (
@@ -1188,6 +1292,320 @@ export function Academics() {
                 onClick={() => setShowSylModal(false)}
                 className="flex-1 bg-gray-700 text-white text-xs py-2 rounded"
                 data-ocid="academics.syllabus.cancel_button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─ CLASS TEACHERS ─ */}
+      {tab === "classteachers" && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-white font-semibold text-sm">
+                Class Teacher Assignment
+              </h3>
+              <p className="text-gray-400 text-xs mt-0.5">
+                Assign one class teacher per section. A section can only have
+                one class teacher.
+              </p>
+            </div>
+          </div>
+
+          {allClassSections.length === 0 ? (
+            <div
+              className="text-center py-12 text-gray-500 rounded-lg text-sm"
+              style={{ background: "#111827", border: "1px dashed #374151" }}
+              data-ocid="academics.classteachers.empty_state"
+            >
+              No class sections found. Please add classes in the Classes &
+              Sections tab first.
+            </div>
+          ) : (
+            <div className="rounded-lg overflow-hidden border border-gray-700">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: "#1a1f2e" }}>
+                    {[
+                      "Class-Section",
+                      "Assigned Teacher",
+                      "Subjects Teaching",
+                      "Class Range",
+                      "Actions",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-3 py-2 text-gray-400 font-medium"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {allClassSections.map((cs, i) => {
+                    const ct = classTeachers.find((t) => t.classSection === cs);
+                    return (
+                      <tr
+                        key={cs}
+                        style={{
+                          background: i % 2 === 0 ? "#111827" : "#0d111c",
+                        }}
+                        data-ocid={`academics.classteachers.item.${i + 1}`}
+                      >
+                        <td className="px-3 py-2 font-medium text-white">
+                          {cs}
+                        </td>
+                        <td className="px-3 py-2">
+                          {ct ? (
+                            <span className="text-green-400">
+                              {ct.teacherName}
+                            </span>
+                          ) : (
+                            <span className="text-gray-600">Not Assigned</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-gray-300">
+                          {ct && ct.subjects.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {ct.subjects.map((subj) => (
+                                <span
+                                  key={subj}
+                                  className="bg-blue-900/40 text-blue-300 text-[10px] px-2 py-0.5 rounded-full border border-blue-800"
+                                >
+                                  {subj}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400">
+                          {ct?.classRangeFrom ? (
+                            `${ct.classRangeFrom} to ${ct.classRangeTo || ct.classRangeFrom}`
+                          ) : (
+                            <span className="text-gray-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditCtSection(cs);
+                                setCtError("");
+                                setCtForm({
+                                  teacherName: ct?.teacherName || "",
+                                  teacherId: ct?.teacherId || "",
+                                  subjects: ct?.subjects.join(", ") || "",
+                                  classRangeFrom: ct?.classRangeFrom || "",
+                                  classRangeTo: ct?.classRangeTo || "",
+                                });
+                                setShowCtModal(true);
+                              }}
+                              className="text-blue-400 hover:text-blue-300 text-[10px] px-2 py-1 rounded bg-blue-900/30 hover:bg-blue-900/50 transition"
+                              data-ocid={`academics.classteachers.edit_button.${i + 1}`}
+                            >
+                              {ct ? "Edit" : "Assign"}
+                            </button>
+                            {ct && (
+                              <button
+                                type="button"
+                                onClick={() => deleteClassTeacher(cs)}
+                                className="text-red-400 hover:text-red-300 text-[10px] px-2 py-1 rounded bg-red-900/20 hover:bg-red-900/40 transition"
+                                data-ocid={`academics.classteachers.delete_button.${i + 1}`}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─ CLASS TEACHER MODAL ─ */}
+      {showCtModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          data-ocid="academics.classteachers.modal"
+        >
+          <div
+            className="rounded-xl p-6 w-full max-w-md"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold">
+                Assign Class Teacher — {editCtSection}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCtModal(false);
+                  setCtError("");
+                }}
+                className="text-gray-400 hover:text-white"
+                data-ocid="academics.classteachers.close_button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {ctError && (
+              <div
+                className="rounded-lg px-3 py-2 mb-3 text-xs text-red-300"
+                style={{ background: "#450a0a", border: "1px solid #7f1d1d" }}
+                data-ocid="academics.classteachers.error_state"
+              >
+                ⚠️ {ctError}
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="ct-teacher"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Teacher
+                </label>
+                <select
+                  id="ct-teacher"
+                  value={ctForm.teacherName}
+                  onChange={(e) => {
+                    const staff = loadStaff();
+                    const selected = staff.find(
+                      (s) => s.name === e.target.value,
+                    );
+                    setCtForm((p) => ({
+                      ...p,
+                      teacherName: e.target.value,
+                      teacherId: selected?.id || e.target.value,
+                    }));
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  data-ocid="academics.classteachers.select"
+                >
+                  <option value="">-- Select Teacher --</option>
+                  {loadStaff().map((s) => (
+                    <option key={s.id} value={s.name}>
+                      {s.name}
+                    </option>
+                  ))}
+                  {loadStaff().length === 0 && (
+                    <option disabled>
+                      No staff found. Add staff in HR module.
+                    </option>
+                  )}
+                </select>
+                {loadStaff().length === 0 && (
+                  <p className="text-yellow-500 text-[10px] mt-1">
+                    No staff found. You can type a name below or add staff in HR
+                    module first.
+                  </p>
+                )}
+                <input
+                  placeholder="Or type teacher name manually"
+                  value={ctForm.teacherName}
+                  onChange={(e) =>
+                    setCtForm((p) => ({ ...p, teacherName: e.target.value }))
+                  }
+                  className="w-full mt-1 bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-green-500"
+                  data-ocid="academics.classteachers.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="ct-subjects"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Subjects Teaching (comma separated)
+                </label>
+                <input
+                  id="ct-subjects"
+                  value={ctForm.subjects}
+                  onChange={(e) =>
+                    setCtForm((p) => ({ ...p, subjects: e.target.value }))
+                  }
+                  placeholder="e.g. Maths, Science, English"
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-green-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label
+                    htmlFor="ct-from"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    Class Range From
+                  </label>
+                  <select
+                    id="ct-from"
+                    value={ctForm.classRangeFrom}
+                    onChange={(e) =>
+                      setCtForm((p) => ({
+                        ...p,
+                        classRangeFrom: e.target.value,
+                      }))
+                    }
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  >
+                    <option value="">-- Select --</option>
+                    {classes.map((c) => (
+                      <option key={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label
+                    htmlFor="ct-to"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    Class Range To
+                  </label>
+                  <select
+                    id="ct-to"
+                    value={ctForm.classRangeTo}
+                    onChange={(e) =>
+                      setCtForm((p) => ({ ...p, classRangeTo: e.target.value }))
+                    }
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  >
+                    <option value="">-- Select --</option>
+                    {classes.map((c) => (
+                      <option key={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={saveClassTeacher}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded"
+                data-ocid="academics.classteachers.submit_button"
+              >
+                Save Assignment
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCtModal(false);
+                  setCtError("");
+                }}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded"
+                data-ocid="academics.classteachers.cancel_button"
               >
                 Cancel
               </button>

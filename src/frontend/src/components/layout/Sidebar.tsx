@@ -83,6 +83,12 @@ const navModules: NavModule[] = [
     ],
   },
   {
+    icon: <GraduationCap size={15} className="text-green-400" />,
+    label: "Promote Students",
+    path: "/promote",
+    permissionModule: "Student Information",
+  },
+  {
     icon: <Settings size={15} />,
     label: "System Setting",
     path: "/settings",
@@ -175,7 +181,7 @@ const navModules: NavModule[] = [
       { label: "Class Timetable", path: "/academics" },
       { label: "Teachers Timetable", path: "/teacher-timetable" },
       { label: "Assign Class Teacher", path: "/academics" },
-      { label: "Promote Students", path: "/academics" },
+      { label: "Promote Students", path: "/promote" },
       { label: "Subjects", path: "/academics" },
       { label: "Class", path: "/academics" },
       { label: "Sections", path: "/academics" },
@@ -423,6 +429,18 @@ export function Sidebar({ collapsed, currentPath, navigate }: SidebarProps) {
                       background: "#25D36620",
                       color: "#25D366",
                       border: "1px solid #25D36640",
+                    }}
+                  >
+                    NEW
+                  </span>
+                )}
+                {mod.label === "Promote Students" && (
+                  <span
+                    className="text-[9px] px-1 py-0 rounded font-bold"
+                    style={{
+                      background: "#16a34a20",
+                      color: "#4ade80",
+                      border: "1px solid #16a34a40",
                     }}
                   >
                     NEW

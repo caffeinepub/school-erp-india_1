@@ -16,6 +16,7 @@ import { HumanResource } from "./pages/HR";
 import { Homework } from "./pages/Homework";
 import { Inventory } from "./pages/Inventory";
 import { LoginPage } from "./pages/LoginPage";
+import { PromoteStudents } from "./pages/PromoteStudents";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Students } from "./pages/Students";
@@ -86,6 +87,7 @@ function AppInner() {
     if (path === "/settings") return <Settings />;
     if (path === "/alumni") return <Alumni />;
     if (path === "/teacher-timetable") return <TeacherTimetable />;
+    if (path === "/promote") return <PromoteStudents />;
     return <Dashboard navigate={navigate} />;
   };
 

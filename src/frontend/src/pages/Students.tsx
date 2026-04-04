@@ -52,6 +52,12 @@ interface Student {
   leavingDate?: string;
   leavingReason?: string;
   leavingRemarks?: string;
+  session?: string;
+  prevSessionDues?: Array<{
+    month: string;
+    sessionLabel: string;
+    amount: number;
+  }>;
 }
 
 const MONTHS = [
@@ -2024,7 +2030,13 @@ export function Students() {
   useEffect(() => {
     try {
       const data = JSON.parse(localStorage.getItem("erp_students") || "[]");
-      if (Array.isArray(data)) setStudents(data);
+      if (Array.isArray(data)) {
+        // Migration: stamp session field if missing
+        const migrated = data.map((s: Student) =>
+          s.session ? s : { ...s, session: "2025-26" },
+        );
+        setStudents(migrated);
+      }
     } catch {
       setStudents([]);
     }

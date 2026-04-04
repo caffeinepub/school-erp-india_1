@@ -15,7 +15,7 @@ import {
   User,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 // ─── Number to Words Helper ──────────────────────────────────────────────────
@@ -1739,6 +1739,12 @@ interface StudentRecord {
   category: string;
   route: string;
   oldBalance: number;
+  session?: string;
+  prevSessionDues?: Array<{
+    month: string;
+    sessionLabel: string;
+    amount: number;
+  }>;
 }
 
 interface PaymentRecord {
@@ -1758,6 +1764,7 @@ interface PaymentRecord {
   balance: number;
   paymentMode: string;
   remarks: string;
+  session?: string;
 }
 
 interface OtherChargeItem {
@@ -1972,6 +1979,16 @@ function CollectFeesTab() {
       toast.error("Load a student and select months first");
       return;
     }
+    const currentSession = (() => {
+      try {
+        const settings = JSON.parse(
+          localStorage.getItem("erp_settings") || "{}",
+        );
+        return settings.session || "2025-26";
+      } catch {
+        return "2025-26";
+      }
+    })();
     const record: PaymentRecord = {
       id: Date.now().toString(),
       receiptNo,
@@ -1989,6 +2006,7 @@ function CollectFeesTab() {
       balance: balanceAmt,
       paymentMode,
       remarks,
+      session: currentSession,
     };
     const existing: PaymentRecord[] = (() => {
       try {
@@ -3813,6 +3831,93 @@ function DuesFeesTab({ onCollect }: { onCollect: () => void }) {
                 </tbody>
               </table>
             </div>
+
+            {/* Previous Session Dues */}
+            {student?.prevSessionDues && student.prevSessionDues.length > 0 && (
+              <div className="mt-5">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-white text-xs font-semibold">
+                    Previous Session Dues
+                  </span>
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                    style={{
+                      background: "#7c3aed30",
+                      color: "#a78bfa",
+                      border: "1px solid #7c3aed50",
+                    }}
+                  >
+                    {student.prevSessionDues[0]?.sessionLabel || "Previous"}
+                  </span>
+                </div>
+                <div
+                  className="rounded-lg overflow-hidden"
+                  style={{ border: "1px solid #374151" }}
+                >
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: "#1a1f2e" }}>
+                        <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                          Month
+                        </th>
+                        <th className="text-left px-3 py-2 text-gray-400 font-medium">
+                          Session
+                        </th>
+                        <th className="text-right px-3 py-2 text-gray-400 font-medium">
+                          Due Amount
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {student.prevSessionDues.map((d, i) => (
+                        <tr
+                          key={`${d.sessionLabel}-${d.month}`}
+                          style={{
+                            background: i % 2 === 0 ? "#111827" : "#0d111c",
+                            borderBottom: "1px solid #1f2937",
+                          }}
+                        >
+                          <td className="px-3 py-2 text-white">{d.month}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className="text-[10px] px-2 py-0.5 rounded-full"
+                              style={{
+                                background: "#7c3aed20",
+                                color: "#a78bfa",
+                              }}
+                            >
+                              {d.sessionLabel}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right text-red-400 font-semibold">
+                            ₹{d.amount.toLocaleString("en-IN")}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr
+                        style={{
+                          background: "#1a1f2e",
+                          borderTop: "2px solid #374151",
+                        }}
+                      >
+                        <td
+                          colSpan={2}
+                          className="px-3 py-2 text-gray-400 font-semibold"
+                        >
+                          TOTAL PREVIOUS SESSION DUES
+                        </td>
+                        <td className="px-3 py-2 text-right font-bold text-red-400">
+                          ₹
+                          {student.prevSessionDues
+                            .reduce((s, d) => s + d.amount, 0)
+                            .toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -3833,6 +3938,24 @@ export function Fees() {
   >("collect");
   const [fees, _setFees] = useState<FeeRecord[]>(initialFees);
   const [search, setSearch] = useState("");
+
+  // Migration: stamp session field on existing payments
+  useEffect(() => {
+    try {
+      const payments: PaymentRecord[] = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      );
+      const needsMigration = payments.some((p) => !p.session);
+      if (needsMigration) {
+        const migrated = payments.map((p) =>
+          p.session ? p : { ...p, session: "2025-26" },
+        );
+        localStorage.setItem("erp_fee_payments", JSON.stringify(migrated));
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // Other Charges state (for the OtherCharges tab)
   const [otherCharges, setOtherCharges] = useState([
