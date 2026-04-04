@@ -1765,6 +1765,40 @@ interface PaymentRecord {
   paymentMode: string;
   remarks: string;
   session?: string;
+  receivedBy?: string;
+}
+
+function getCurrentUserInfo(): { name: string; role: string; display: string } {
+  try {
+    const user = JSON.parse(localStorage.getItem("erp_auth_user") || "{}");
+    const name = user.name || "Admin";
+    const roleMap: Record<string, string> = {
+      super_admin: "Super Admin",
+      admin: "Admin",
+      accountant: "Accountant",
+      teacher: "Teacher",
+      librarian: "Librarian",
+      parent: "Parent",
+      student: "Student",
+    };
+    const roleLabel = roleMap[user.role] || user.role || "Admin";
+    return {
+      name,
+      role: user.role || "admin",
+      display: `${name} (${roleLabel})`,
+    };
+  } catch {
+    return { name: "Admin", role: "admin", display: "Admin (Admin)" };
+  }
+}
+
+function getCurrentUserRole(): string {
+  try {
+    const user = JSON.parse(localStorage.getItem("erp_auth_user") || "{}");
+    return user.role || "viewer";
+  } catch {
+    return "viewer";
+  }
 }
 
 interface OtherChargeItem {
@@ -2007,6 +2041,7 @@ function CollectFeesTab() {
       paymentMode,
       remarks,
       session: currentSession,
+      receivedBy: getCurrentUserInfo().display,
     };
     const existing: PaymentRecord[] = (() => {
       try {
@@ -2809,6 +2844,14 @@ function CollectFeesTab() {
         </div>
       </div>
 
+      {/* ── PAYMENT HISTORY ── */}
+      {student && (
+        <PaymentHistorySection
+          admNo={student.admNo}
+          studentName={student.name}
+        />
+      )}
+
       {/* ── BOTTOM ROW ── */}
       <div
         className="flex items-center gap-3 px-4 py-2.5"
@@ -2886,72 +2929,16 @@ function CollectFeesTab() {
         </button>
       </div>
       {showSaveDialog && (
-        <div
-          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
-          data-ocid="collect.save.dialog"
-        >
-          <div
-            className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm shadow-2xl"
-            style={{ borderTop: "3px solid #22c55e" }}
-          >
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <div className="text-green-400 text-2xl mb-1">✓</div>
-                <h3 className="text-white font-bold text-base">
-                  Receipt Saved Successfully
-                </h3>
-                <p className="text-gray-400 text-xs mt-1">
-                  Receipt No:{" "}
-                  <span className="text-blue-400 font-semibold">
-                    {receiptNo}
-                  </span>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSaveDialog(false);
-                  handleNew();
-                }}
-                className="text-gray-400 hover:text-white"
-                data-ocid="collect.save.close_button"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <p className="text-gray-400 text-xs mb-4">
-              What would you like to do next?
-            </p>
-            <div className="flex gap-3 mb-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSaveDialog(false);
-                  setShowPrintModal(true);
-                }}
-                className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold py-2.5 rounded-lg transition"
-                data-ocid="collect.save.print_button"
-              >
-                🖨️ Print Receipt
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSaveDialog(false);
-                  handleWhatsAppReceipt();
-                  handleNew();
-                }}
-                className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold py-2.5 rounded-lg transition"
-                data-ocid="collect.save.whatsapp_button"
-              >
-                📱 Send WhatsApp
-              </button>
-            </div>
-            <p className="text-gray-600 text-[10px] text-center">
-              You can also access this receipt from Fee Register
-            </p>
-          </div>
-        </div>
+        <SaveReceiptDialog
+          receiptNo={receiptNo}
+          onPrint={() => setShowPrintModal(true)}
+          onWhatsApp={handleWhatsAppReceipt}
+          onDone={() => {
+            setShowSaveDialog(false);
+            handleNew();
+          }}
+          onClose={() => setShowSaveDialog(false)}
+        />
       )}
       {showPrintModal && (
         <ReceiptPrintModal
@@ -2995,15 +2982,604 @@ function CollectFeesTab() {
 }
 
 // ─── Fees Register Tab ────────────────────────────────────────────────────────
+// ─── SaveReceiptDialog ────────────────────────────────────────────────────────
+function SaveReceiptDialog({
+  receiptNo,
+  onPrint,
+  onWhatsApp,
+  onDone,
+  onClose,
+}: {
+  receiptNo: string;
+  onPrint: () => void;
+  onWhatsApp: () => void;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const [printClicked, setPrintClicked] = useState(false);
+  const [waClicked, setWaClicked] = useState(false);
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+      data-ocid="collect.save.dialog"
+    >
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm shadow-2xl"
+        style={{ borderTop: "3px solid #22c55e" }}
+      >
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="text-green-400 text-2xl mb-1">✓</div>
+            <h3 className="text-white font-bold text-base">
+              Receipt Saved Successfully
+            </h3>
+            <p className="text-gray-400 text-xs mt-1">
+              Receipt No:{" "}
+              <span className="text-blue-400 font-semibold">{receiptNo}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white"
+            data-ocid="collect.save.close_button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-gray-400 text-xs mb-4">
+          Choose your next action (both options available independently):
+        </p>
+        <div className="flex flex-col gap-3 mb-4">
+          <button
+            type="button"
+            onClick={() => {
+              setPrintClicked(true);
+              onPrint();
+            }}
+            className={`flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-lg transition ${
+              printClicked
+                ? "bg-blue-800 hover:bg-blue-700"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
+            data-ocid="collect.save.print_button"
+          >
+            🖨️ Print Receipt
+            {printClicked && (
+              <span className="text-green-300 text-xs ml-1">✓ Opened</span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWaClicked(true);
+              onWhatsApp();
+            }}
+            className={`flex items-center justify-center gap-2 text-white text-sm font-semibold py-2.5 rounded-lg transition ${
+              waClicked
+                ? "bg-green-800 hover:bg-green-700"
+                : "bg-green-600 hover:bg-green-700"
+            }`}
+            data-ocid="collect.save.whatsapp_button"
+          >
+            📱 Send WhatsApp
+            {waClicked && (
+              <span className="text-green-300 text-xs ml-1">✓ Sent</span>
+            )}
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={onDone}
+          className="w-full py-2 rounded-lg border border-gray-600 text-gray-300 hover:text-white hover:border-gray-400 text-sm font-medium transition"
+          data-ocid="collect.save.confirm_button"
+        >
+          ✓ Done — New Entry
+        </button>
+        <p className="text-gray-600 text-[10px] text-center mt-3">
+          You can access this receipt anytime from Fee Register
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── PaymentHistorySection ────────────────────────────────────────────────────
+function PaymentHistorySection({
+  admNo,
+  studentName,
+}: { admNo: string; studentName: string }) {
+  const [open, setOpen] = useState(true);
+
+  const payments: PaymentRecord[] = (() => {
+    try {
+      const all = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      ) as PaymentRecord[];
+      return all
+        .filter((p) => p.admNo === admNo)
+        .sort((a, b) => (b.date > a.date ? 1 : -1));
+    } catch {
+      return [];
+    }
+  })();
+
+  return (
+    <div style={{ borderTop: "1px solid #2d3748" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-2 text-xs font-medium text-blue-400 hover:bg-gray-800/30 transition"
+        data-ocid="collect.payhistory.toggle"
+      >
+        <span>
+          📋 Payment History — {studentName} {open ? "▲" : "▼"}
+        </span>
+        <span className="text-gray-500 text-[10px]">
+          {payments.length} record{payments.length !== 1 ? "s" : ""}
+        </span>
+      </button>
+      {open && (
+        <div className="px-4 pb-3">
+          {payments.length === 0 ? (
+            <div
+              className="text-center text-gray-500 text-xs py-4"
+              data-ocid="collect.payhistory.empty_state"
+            >
+              No payment history yet.
+            </div>
+          ) : (
+            <div
+              className="overflow-x-auto"
+              data-ocid="collect.payhistory.table"
+            >
+              <table className="w-full text-xs">
+                <thead>
+                  <tr style={{ background: "#1a1f2e" }}>
+                    {[
+                      "Date",
+                      "Receipt No.",
+                      "Months",
+                      "Amount Paid (₹)",
+                      "Mode",
+                      "Received By",
+                    ].map((h) => (
+                      <th
+                        key={h}
+                        className="text-left px-3 py-1.5 text-gray-400 font-medium whitespace-nowrap"
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p, i) => (
+                    <tr
+                      key={p.id}
+                      style={{
+                        background: i % 2 === 0 ? "#111827" : "#0d111c",
+                        borderBottom: "1px solid #2d3748",
+                      }}
+                      data-ocid={`collect.payhistory.item.${i + 1}`}
+                    >
+                      <td className="px-3 py-1.5 text-gray-300 whitespace-nowrap">
+                        {p.date}
+                      </td>
+                      <td className="px-3 py-1.5 text-blue-400 font-medium">
+                        {p.receiptNo}
+                      </td>
+                      <td className="px-3 py-1.5 text-gray-400 text-[10px] max-w-32 truncate">
+                        {p.months.join(", ")}
+                      </td>
+                      <td className="px-3 py-1.5 text-green-400 font-semibold text-right">
+                        ₹{p.receiptAmt.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-3 py-1.5 text-purple-300">
+                        {p.paymentMode || "Cash"}
+                      </td>
+                      <td className="px-3 py-1.5 text-gray-400 whitespace-nowrap">
+                        {p.receivedBy || "Admin (Admin)"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── FeeRegisterDetailModal ───────────────────────────────────────────────────
+function FeeRegisterDetailModal({
+  admNo,
+  studentName,
+  className,
+  onClose,
+  onUpdate,
+}: {
+  admNo: string;
+  studentName: string;
+  className: string;
+  onClose: () => void;
+  onUpdate: () => void;
+}) {
+  const role = getCurrentUserRole();
+  const canEdit = role === "super_admin" || role === "admin";
+  const canDelete = role === "super_admin";
+
+  const [payments, setPayments] = useState<PaymentRecord[]>(() => {
+    try {
+      const all = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      ) as PaymentRecord[];
+      return all
+        .filter((p) => p.admNo === admNo)
+        .sort((a, b) => (b.date > a.date ? 1 : -1));
+    } catch {
+      return [];
+    }
+  });
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<Partial<PaymentRecord>>({});
+
+  const refreshPayments = () => {
+    try {
+      const all = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      ) as PaymentRecord[];
+      setPayments(
+        all
+          .filter((p) => p.admNo === admNo)
+          .sort((a, b) => (b.date > a.date ? 1 : -1)),
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const startEdit = (p: PaymentRecord) => {
+    setEditingId(p.id);
+    setEditForm({
+      paymentMode: p.paymentMode,
+      remarks: p.remarks,
+      receiptAmt: p.receiptAmt,
+      date: p.date,
+    });
+  };
+
+  const saveEdit = (p: PaymentRecord) => {
+    try {
+      const all = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      ) as PaymentRecord[];
+      const updated = all.map((r) =>
+        r.id === p.id
+          ? {
+              ...r,
+              paymentMode: editForm.paymentMode ?? r.paymentMode,
+              remarks: editForm.remarks ?? r.remarks,
+              receiptAmt: Number(editForm.receiptAmt) ?? r.receiptAmt,
+              date: editForm.date ?? r.date,
+              balance:
+                r.netFees - (Number(editForm.receiptAmt) ?? r.receiptAmt),
+            }
+          : r,
+      );
+      localStorage.setItem("erp_fee_payments", JSON.stringify(updated));
+      setEditingId(null);
+      refreshPayments();
+      onUpdate();
+      toast.success("Payment record updated.");
+    } catch {
+      toast.error("Failed to update record.");
+    }
+  };
+
+  const deletePayment = (id: string) => {
+    if (!window.confirm("Delete this payment record? This cannot be undone."))
+      return;
+    try {
+      const all = JSON.parse(
+        localStorage.getItem("erp_fee_payments") || "[]",
+      ) as PaymentRecord[];
+      localStorage.setItem(
+        "erp_fee_payments",
+        JSON.stringify(all.filter((r) => r.id !== id)),
+      );
+      refreshPayments();
+      onUpdate();
+      toast.success("Payment record deleted.");
+    } catch {
+      toast.error("Failed to delete record.");
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
+      data-ocid="register.detail.modal"
+    >
+      <div
+        className="bg-gray-900 border border-gray-700 rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col"
+        style={{ borderTop: "3px solid #3b82f6" }}
+      >
+        {/* Modal header */}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-700">
+          <div>
+            <h3 className="text-white font-bold text-sm">{studentName}</h3>
+            <p className="text-gray-400 text-xs">
+              Adm. No: <span className="text-yellow-400">{admNo}</span> · Class:{" "}
+              <span className="text-blue-400">{className}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-400 hover:text-white p-1"
+            data-ocid="register.detail.close_button"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Role badge */}
+        <div className="px-5 py-2 border-b border-gray-700/50 flex items-center gap-2">
+          <span className="text-gray-500 text-xs">Your access:</span>
+          {canDelete ? (
+            <span className="text-[10px] bg-red-900/50 text-red-300 px-2 py-0.5 rounded-full">
+              Super Admin — Edit + Delete
+            </span>
+          ) : canEdit ? (
+            <span className="text-[10px] bg-orange-900/50 text-orange-300 px-2 py-0.5 rounded-full">
+              Admin — Edit Only
+            </span>
+          ) : (
+            <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded-full">
+              View Only
+            </span>
+          )}
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-y-auto">
+          {payments.length === 0 ? (
+            <div
+              className="text-center text-gray-500 text-sm py-12"
+              data-ocid="register.detail.empty_state"
+            >
+              No payment records found for this student.
+            </div>
+          ) : (
+            <table className="w-full text-xs" data-ocid="register.detail.table">
+              <thead className="sticky top-0">
+                <tr style={{ background: "#1a1f2e" }}>
+                  {[
+                    "Date",
+                    "Receipt No.",
+                    "Months",
+                    "Amount (₹)",
+                    "Net (₹)",
+                    "Bal (₹)",
+                    "Mode",
+                    "Received By",
+                    ...(canEdit ? ["Actions"] : []),
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((p, i) => (
+                  <tr
+                    key={p.id}
+                    style={{
+                      background: i % 2 === 0 ? "#111827" : "#0d111c",
+                      borderBottom: "1px solid #1f2937",
+                    }}
+                    data-ocid={`register.detail.item.${i + 1}`}
+                  >
+                    {editingId === p.id ? (
+                      <>
+                        <td className="px-3 py-2">
+                          <input
+                            type="date"
+                            value={editForm.date || p.date}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                date: e.target.value,
+                              }))
+                            }
+                            className="bg-gray-800 border border-blue-500 rounded px-1.5 py-0.5 text-white text-xs w-28"
+                            data-ocid="register.edit.input"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-blue-400">
+                          {p.receiptNo}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400 text-[10px]">
+                          {p.months.join(", ")}
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            type="number"
+                            value={editForm.receiptAmt ?? p.receiptAmt}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                receiptAmt: Number(e.target.value),
+                              }))
+                            }
+                            className="bg-gray-800 border border-green-500 rounded px-1.5 py-0.5 text-white text-xs w-20"
+                            data-ocid="register.edit.input"
+                          />
+                        </td>
+                        <td className="px-3 py-2 text-gray-300">
+                          ₹{p.netFees.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-3 py-2 text-red-400">
+                          ₹
+                          {(
+                            p.netFees -
+                            (Number(editForm.receiptAmt) ?? p.receiptAmt)
+                          ).toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={editForm.paymentMode || p.paymentMode}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                paymentMode: e.target.value,
+                              }))
+                            }
+                            className="bg-gray-800 border border-purple-500 rounded px-1.5 py-0.5 text-white text-xs"
+                            data-ocid="register.edit.select"
+                          >
+                            {[
+                              "Cash",
+                              "Online/UPI",
+                              "Cheque",
+                              "DD",
+                              "Card",
+                              "NEFT/RTGS",
+                            ].map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2 text-gray-400">
+                          {p.receivedBy || "Admin (Admin)"}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => saveEdit(p)}
+                              className="text-[10px] bg-green-700 hover:bg-green-600 text-white px-2 py-0.5 rounded transition"
+                              data-ocid="register.edit.save_button"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="text-[10px] bg-gray-700 hover:bg-gray-600 text-white px-2 py-0.5 rounded transition"
+                              data-ocid="register.edit.cancel_button"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-3 py-2 text-gray-300 whitespace-nowrap">
+                          {p.date}
+                        </td>
+                        <td className="px-3 py-2 text-blue-400 font-medium">
+                          {p.receiptNo}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400 text-[10px] max-w-32 truncate">
+                          {p.months.join(", ")}
+                        </td>
+                        <td className="px-3 py-2 text-green-400 font-semibold text-right">
+                          ₹{p.receiptAmt.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-3 py-2 text-gray-300 text-right">
+                          ₹{p.netFees.toLocaleString("en-IN")}
+                        </td>
+                        <td
+                          className="px-3 py-2 text-right"
+                          style={{
+                            color: p.balance > 0 ? "#f87171" : "#4ade80",
+                          }}
+                        >
+                          ₹{p.balance.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-3 py-2 text-purple-300">
+                          {p.paymentMode || "Cash"}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400 whitespace-nowrap text-[10px]">
+                          {p.receivedBy || "Admin (Admin)"}
+                        </td>
+                        {canEdit && (
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => startEdit(p)}
+                                className="p-1 text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 rounded transition"
+                                title="Edit"
+                                data-ocid="register.detail.edit_button"
+                              >
+                                ✏️
+                              </button>
+                              {canDelete && (
+                                <button
+                                  type="button"
+                                  onClick={() => deletePayment(p.id)}
+                                  className="p-1 text-red-400 hover:text-red-300 hover:bg-red-900/30 rounded transition"
+                                  title="Delete"
+                                  data-ocid="register.detail.delete_button"
+                                >
+                                  🗑️
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FeesRegisterTab() {
   const [search, setSearch] = useState("");
   const [filterClass, setFilterClass] = useState("");
   const [filterMode, setFilterMode] = useState("");
   const [filterFrom, setFilterFrom] = useState("");
   const [filterTo, setFilterTo] = useState("");
+  const [detailStudent, setDetailStudent] = useState<{
+    admNo: string;
+    studentName: string;
+    className: string;
+  } | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const viewingSession = localStorage.getItem("erp_viewing_session") || "";
 
   const payments: PaymentRecord[] = (() => {
+    // refreshKey dependency forces re-read when records are edited/deleted
+    void refreshKey;
     try {
+      if (viewingSession) {
+        // Load from archived session
+        const archiveKey = `erp_session_archive_${viewingSession.replace(/[^a-zA-Z0-9]/g, "_")}`;
+        const archive = JSON.parse(localStorage.getItem(archiveKey) || "{}");
+        return (archive.payments || []) as PaymentRecord[];
+      }
       return JSON.parse(localStorage.getItem("erp_fee_payments") || "[]");
     } catch {
       return [];
@@ -3199,6 +3775,7 @@ function FeesRegisterTab() {
                   "Concession",
                   "Remarks",
                   "Status",
+                  "Details",
                 ].map((h) => (
                   <th
                     key={h}
@@ -3213,7 +3790,7 @@ function FeesRegisterTab() {
               {filtered.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={15}
+                    colSpan={16}
                     className="px-3 py-8 text-center text-gray-500"
                   >
                     No payment records found. Collect fees first to see them
@@ -3307,6 +3884,23 @@ function FeesRegisterTab() {
                           {status}
                         </span>
                       </td>
+                      <td className="px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDetailStudent({
+                              admNo: p.admNo,
+                              studentName: p.studentName,
+                              className: p.className,
+                            })
+                          }
+                          className="text-blue-400 hover:text-blue-300 text-xs px-2 py-0.5 rounded border border-blue-500/40 hover:border-blue-400 transition"
+                          title="View all payments for this student"
+                          data-ocid="register.detail.open_modal_button"
+                        >
+                          👁 View
+                        </button>
+                      </td>
                     </tr>
                   );
                 })
@@ -3338,13 +3932,22 @@ function FeesRegisterTab() {
                   >
                     ₹{totalBalance.toLocaleString("en-IN")}
                   </td>
-                  <td colSpan={4} />
+                  <td colSpan={5} />
                 </tr>
               </tfoot>
             )}
           </table>
         </div>
       </div>
+      {detailStudent && (
+        <FeeRegisterDetailModal
+          admNo={detailStudent.admNo}
+          studentName={detailStudent.studentName}
+          className={detailStudent.className}
+          onClose={() => setDetailStudent(null)}
+          onUpdate={() => setRefreshKey((k) => k + 1)}
+        />
+      )}
     </div>
   );
 }

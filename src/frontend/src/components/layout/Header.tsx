@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Archive,
   Bell,
   Building2,
   Calendar,
@@ -13,7 +14,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 
@@ -48,6 +49,66 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
   const { branches, activeBranch, setActiveBranch } = useSchool();
   const [branchOpen, setBranchOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  const [sessionOpen, setSessionOpen] = useState(false);
+  const sessionRef = useRef<HTMLDivElement>(null);
+  const [viewingSession, setViewingSession] = useState<string>(() => {
+    return localStorage.getItem("erp_viewing_session") || "";
+  });
+
+  const archivedSessions: string[] = (() => {
+    const sessions: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("erp_session_archive_")) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key) || "{}");
+          if (data.sessionLabel) sessions.push(data.sessionLabel);
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    return sessions;
+  })();
+
+  const currentActiveSession = (() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem("erp_settings") || "{}").session ||
+        "2025-26"
+      );
+    } catch {
+      return "2025-26";
+    }
+  })();
+
+  const allSessions = [
+    currentActiveSession,
+    ...archivedSessions.filter((s) => s !== currentActiveSession),
+  ];
+
+  const switchSession = (session: string) => {
+    const val = session === currentActiveSession ? "" : session;
+    setViewingSession(val);
+    localStorage.setItem("erp_viewing_session", val);
+    setSessionOpen(false);
+    window.dispatchEvent(
+      new CustomEvent("erp_session_changed", { detail: { session: val } }),
+    );
+  };
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (
+        sessionRef.current &&
+        !sessionRef.current.contains(e.target as Node)
+      ) {
+        setSessionOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <header
@@ -104,6 +165,70 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
                   {b.name}
                 </button>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* Session Switcher */}
+        <div className="relative" ref={sessionRef}>
+          <button
+            type="button"
+            onClick={() => setSessionOpen((v) => !v)}
+            className={`flex items-center gap-1 text-xs border rounded px-2 py-1 transition ${
+              viewingSession
+                ? "text-amber-300 bg-amber-900/30 border-amber-500/50 hover:bg-amber-900/40"
+                : "text-gray-300 bg-gray-800 hover:bg-gray-700 border-gray-600 hover:text-white"
+            }`}
+            data-ocid="header.session.toggle"
+          >
+            <Archive
+              size={11}
+              className={viewingSession ? "text-amber-400" : "text-blue-400"}
+            />
+            <span className="hidden sm:inline max-w-[100px] truncate">
+              {viewingSession
+                ? viewingSession
+                : currentActiveSession || "Session"}
+            </span>
+            <ChevronDown size={11} />
+          </button>
+          {sessionOpen && (
+            <div
+              className="absolute top-full left-0 mt-1 z-50 min-w-[160px] rounded border border-gray-600 shadow-xl"
+              style={{ background: "#1e293b" }}
+            >
+              <div className="px-3 py-1.5 text-[10px] text-gray-500 font-semibold uppercase tracking-wider border-b border-gray-700">
+                Select Session
+              </div>
+              {allSessions.map((s) => {
+                const isCurrent = s === currentActiveSession;
+                const isSelected = viewingSession
+                  ? s === viewingSession
+                  : isCurrent;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => switchSession(s)}
+                    data-ocid="header.session.item"
+                    className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-700 transition flex items-center justify-between ${
+                      isSelected
+                        ? "text-blue-400 font-semibold"
+                        : "text-gray-300"
+                    }`}
+                  >
+                    <span>{s}</span>
+                    <span className="flex items-center gap-1">
+                      {isCurrent && (
+                        <span className="text-[9px] bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded">
+                          Active
+                        </span>
+                      )}
+                      {isSelected && <span className="text-blue-400">✓</span>}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

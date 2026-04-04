@@ -79,6 +79,8 @@ interface SavedTimetableSet {
   periods: number;
   periodStart: string;
   periodDuration: number;
+  periodDurations?: number[];
+  intervalMinutes?: number;
   timetables: SectionTimetable[];
   savedAt: string;
 }
@@ -133,15 +135,23 @@ function calcPeriodTimes(
   startTime: string,
   durationMins: number,
   count: number,
+  periodDurations?: number[],
+  intervalMinutes?: number,
 ): { from: string; to: string }[] {
   const result: { from: string; to: string }[] = [];
   const [h, m] = startTime.split(":").map(Number);
   let total = h * 60 + m;
+  const gap = intervalMinutes ?? 0;
   for (let i = 0; i < count; i++) {
+    const dur =
+      periodDurations && periodDurations[i] != null
+        ? periodDurations[i]
+        : durationMins;
     const from = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-    total += durationMins;
+    total += dur;
     const to = `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
     result.push({ from, to });
+    total += gap; // add interval after each period
   }
   return result;
 }
@@ -687,7 +697,11 @@ export function TeacherTimetable() {
   ]);
   const [periodsPerDay, setPeriodsPerDay] = useState(8);
   const [periodStart, setPeriodStart] = useState("08:00");
-  const [periodDuration, setPeriodDuration] = useState(45);
+  const [periodDuration, _setPeriodDuration] = useState(45); // fallback/default
+  const [periodDurations, setPeriodDurations] = useState<number[]>(
+    Array(8).fill(45),
+  );
+  const [intervalMinutes, setIntervalMinutes] = useState(5);
 
   // ── Step 3 state ──────────────────────────────────────────────────────────────
   const [sectionTimetables, setSectionTimetables] = useState<
@@ -784,8 +798,21 @@ export function TeacherTimetable() {
 
   // Period timings
   const periodTimes = useMemo(
-    () => calcPeriodTimes(periodStart, periodDuration, periodsPerDay),
-    [periodStart, periodDuration, periodsPerDay],
+    () =>
+      calcPeriodTimes(
+        periodStart,
+        periodDuration,
+        periodsPerDay,
+        periodDurations,
+        intervalMinutes,
+      ),
+    [
+      periodStart,
+      periodDuration,
+      periodsPerDay,
+      periodDurations,
+      intervalMinutes,
+    ],
   );
 
   // Subject color map
@@ -924,6 +951,8 @@ export function TeacherTimetable() {
       periods: periodsPerDay,
       periodStart,
       periodDuration,
+      periodDurations,
+      intervalMinutes,
       timetables: sectionTimetables,
       savedAt: new Date().toLocaleString("en-IN"),
     };
@@ -950,6 +979,8 @@ export function TeacherTimetable() {
     periodsPerDay,
     periodStart,
     periodDuration,
+    periodDurations,
+    intervalMinutes,
   ]);
 
   const saveTimetableRef = useRef(saveTimetable);
@@ -1000,6 +1031,8 @@ export function TeacherTimetable() {
       set.periodStart,
       set.periodDuration,
       set.periods,
+      set.periodDurations,
+      set.intervalMinutes,
     );
 
     const sectionHTML = set.timetables
@@ -1039,6 +1072,8 @@ export function TeacherTimetable() {
     periods: number,
     pStart: string,
     pDur: number,
+    pDurations?: number[],
+    pInterval?: number,
   ) {
     const schoolProfile = (() => {
       try {
@@ -1050,7 +1085,7 @@ export function TeacherTimetable() {
       }
     })();
     const schoolName = schoolProfile.name || "School";
-    const times = calcPeriodTimes(pStart, pDur, periods);
+    const times = calcPeriodTimes(pStart, pDur, periods, pDurations, pInterval);
     const ordDays = ALL_DAYS.filter((d) => days.includes(d));
     const sectionKeys = timetables.map((t) => t.sectionKey);
 
@@ -1490,7 +1525,7 @@ export function TeacherTimetable() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <Label
                   htmlFor="periods-per-day"
@@ -1504,31 +1539,51 @@ export function TeacherTimetable() {
                   min={1}
                   max={12}
                   value={periodsPerDay}
-                  onChange={(e) =>
-                    setPeriodsPerDay(
-                      Math.max(1, Number.parseInt(e.target.value) || 1),
-                    )
-                  }
+                  onChange={(e) => {
+                    const n = Math.max(1, Number.parseInt(e.target.value) || 1);
+                    setPeriodsPerDay(n);
+                    setPeriodDurations((prev) => {
+                      const updated = [...prev];
+                      while (updated.length < n) updated.push(45);
+                      return updated.slice(0, n);
+                    });
+                  }}
                   className="bg-gray-900 border-gray-600 text-white"
                   data-ocid="teacher.timetable.input"
                 />
               </div>
               <div>
                 <Label
-                  htmlFor="period-duration"
+                  htmlFor="period-start"
                   className="text-xs text-gray-400 mb-1.5 block"
                 >
-                  Duration (min)
+                  Start Time
                 </Label>
                 <Input
-                  id="period-duration"
+                  id="period-start"
+                  type="time"
+                  value={periodStart}
+                  onChange={(e) => setPeriodStart(e.target.value)}
+                  className="bg-gray-900 border-gray-600 text-white"
+                  data-ocid="teacher.timetable.input"
+                />
+              </div>
+              <div>
+                <Label
+                  htmlFor="interval-minutes"
+                  className="text-xs text-gray-400 mb-1.5 block"
+                >
+                  Interval/Break (min)
+                </Label>
+                <Input
+                  id="interval-minutes"
                   type="number"
-                  min={10}
-                  max={120}
-                  value={periodDuration}
+                  min={0}
+                  max={30}
+                  value={intervalMinutes}
                   onChange={(e) =>
-                    setPeriodDuration(
-                      Math.max(10, Number.parseInt(e.target.value) || 45),
+                    setIntervalMinutes(
+                      Math.max(0, Number.parseInt(e.target.value) || 0),
                     )
                   }
                   className="bg-gray-900 border-gray-600 text-white"
@@ -1537,21 +1592,44 @@ export function TeacherTimetable() {
               </div>
             </div>
 
+            {/* Per-Period Duration Inputs */}
             <div>
-              <Label
-                htmlFor="period-start"
-                className="text-xs text-gray-400 mb-1.5 block"
-              >
-                Start Time
+              <Label className="text-xs text-gray-400 mb-2 block">
+                Individual Period Durations (min)
               </Label>
-              <Input
-                id="period-start"
-                type="time"
-                value={periodStart}
-                onChange={(e) => setPeriodStart(e.target.value)}
-                className="bg-gray-900 border-gray-600 text-white"
-                data-ocid="teacher.timetable.input"
-              />
+              <div className="grid grid-cols-4 gap-2">
+                {periodDurations
+                  .slice(0, periodsPerDay)
+                  .map((durVal, periodIdx) => (
+                    <div
+                      key={`period-slot-${periodIdx + 1}`}
+                      className="flex flex-col gap-1"
+                    >
+                      <Label className="text-[10px] text-indigo-300">
+                        P{periodIdx + 1}
+                      </Label>
+                      <Input
+                        type="number"
+                        min={5}
+                        max={120}
+                        value={durVal}
+                        onChange={(e) => {
+                          const val = Math.max(
+                            5,
+                            Number.parseInt(e.target.value) || 45,
+                          );
+                          setPeriodDurations((prev) => {
+                            const updated = [...prev];
+                            updated[periodIdx] = val;
+                            return updated;
+                          });
+                        }}
+                        className="bg-gray-900 border-gray-600 text-white text-xs h-8"
+                        data-ocid="teacher.timetable.input"
+                      />
+                    </div>
+                  ))}
+              </div>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -1693,6 +1771,8 @@ export function TeacherTimetable() {
                           periodsPerDay,
                           periodStart,
                           periodDuration,
+                          periodDurations,
+                          intervalMinutes,
                         )
                       }
                       className="border-gray-600 text-gray-300 hover:bg-gray-700 text-xs h-7"

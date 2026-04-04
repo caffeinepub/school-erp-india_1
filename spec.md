@@ -1,70 +1,73 @@
 # School ERP India
 
 ## Current State
-
-- Academics page has 4 tabs: Classes & Sections, Subjects, Timetable, Syllabus. No dedicated class teacher per section assignment exists. Classes have a single teacher field (not section-specific).
-- Students are stored in `erp_students` (localStorage) with fields: id, admNo, name, className, section, status, oldBalance, etc. No session field on students. No promotion/session migration logic exists.
-- Fees stored in `erp_fee_payments` with no session field. Old balance is a plain number on the student record with no month-wise breakdown.
-- HR staff stored in `erp_staff`. No class teacher assignment link from staff to section.
-- App.tsx uses hash-based routing. No `/promote` or `/class-teachers` route exists yet.
+- Full School ERP with Fees, PromoteStudents, Academics, Timetable modules
+- PromoteStudents: archives session to `erp_session_archive_<session>` key, updates `erp_settings.session`, carries dues month-wise
+- Fees/CollectFees: save dialog shows Print or WhatsApp as separate buttons; Fee Register tab lists all receipts
+- Teacher Timetable (TeacherTimetable.tsx): wizard-based, periods have fixed durations from a start time + duration setting
+- Fee receipts: 4 templates including Bharati Format (105x145mm)
+- Role-based permissions system exists in `data/permissions.ts`
 
 ## Requested Changes (Diff)
 
 ### Add
+1. **Session Switcher** -- A session selector in the app (header or fees/student section) allowing user to switch between archived sessions (e.g., 2025-26, 2026-27) and view data read-only. Sessions are stored under `erp_session_archive_<session>` keys. Current session data is always in `erp_students`, `erp_fee_payments`, etc. When viewing an archived session, load data from the archive key instead. The switcher should be visible in relevant modules (Students, Fees, Attendance). Session list is built from all `erp_session_archive_*` keys plus the current active session from settings. Sessions should persist infinitely.
 
-1. **Class Teacher Assignment tab** in Academics (new 5th tab: "Class Teachers")
-   - Grid showing all class-sections (e.g. Class 1-A, Class 1-B, Class 2-A...)
-   - Dropdown to assign one teacher per section (pulls from `erp_staff`)
-   - Conflict prevention: if Class 3-A already has a class teacher, selecting another teacher for 3-A shows an error and blocks the assignment
-   - Each teacher can teach multiple subjects across different classes (already handled via erp_subjects)
-   - Data stored in `erp_class_teachers`: `Array<{ classSection: string, teacherName: string, teacherId: string }>`
+2. **Per-Period Duration in Teacher Timetable** -- In the period config step of the Teacher Timetable wizard, allow each period to have its own individual duration (not a single global duration). Add an "Interval/Break" time between periods that the user can configure. The period timing preview should update live per-period based on individual durations and interval gaps.
 
-2. **Promote Students module** — new page at `/promote` added to sidebar under Students
-   - **Step 1 — Session Setup**: User sees current session (e.g. 2025-26), enters new session (e.g. 2026-27)
-   - **Step 2 — Class Selection**: Table showing all active classes with count of students per class-section. Checkboxes to select which classes to promote (bulk: select all or per class)
-   - **Step 3 — Review**: Preview list of students being promoted (current class → next class). Class 10 students marked as "Passing Out" (will be auto-discontinued with status "Passed Out")
-   - **Step 4 — Execute Promotion**:
-     - Archive current session data: save `erp_sessions_archive` with key `2025-26` containing snapshot of all students + all fee payments
-     - Add `session` field to each student and to each fee payment record going forward
-     - For promoted students: increment class (Class 1→2, ..., Class 9→10, Class 10→Discontinued/Passed Out)
-     - Class 10 students: set status = "Discontinued", leavingReason = "Passed Out", leavingDate = today
-     - For each promoted student: calculate month-wise unpaid dues from `erp_fee_payments` for the old session and store as `prevSessionDues: Array<{ month: string, year: string, amount: number }>` on the student record
-     - Set student.oldBalance = sum of all unpaid fees from previous session
-     - Update student.session = new session label
-   - **Dues Carry Forward (month-wise)**: In Fees > Dues Fees tab, if student has `prevSessionDues`, show a separate section "Previous Session Dues (2025-26)" with month-wise breakdown table showing which months are still unpaid
-   - New session label also stored in Settings under `erp_settings.currentSession`
+3. **Fee Receipt Save Dialog -- Both Buttons Simultaneously** -- When user presses Save in Collect Fees, the dialog should show BOTH "Print Receipt" AND "Send WhatsApp" as action buttons, not as an either/or choice. User can click both if they want. Currently only one can be chosen. Change to show both options clickable independently.
 
-3. **Session field** added to Student data model and PaymentRecord going forward
-   - Existing students get session = "2025-26" on first run (migration)
-   - Existing payment records get session = "2025-26" on first run
+4. **Fees Payment History on Receipt** -- Below the fee table in the Fees Receipt (Collect Fees page, not just the print modal), add a "Payment History" section showing all previous payments for the currently loaded student. Each row shows: Date, Receipt No., Months, Amount Paid, Payment Mode, and Received By (the logged-in user's name + role, e.g., "Rajesh Kumar (Admin)"). This history is pulled from `erp_fee_payments` filtered by the student's admNo.
+
+5. **Fee Register -- Student Detail Drill-Down** -- In the Fee Register tab, clicking/pointing on any row (or a detail icon) should open a drawer/modal showing full payment details for that student: all payment history, each receipt's breakdown, and edit/delete actions. Edit and delete are controlled by role permissions: only Super Admin can delete; Admin and Super Admin can edit. Permissions are checked from the current user's role stored in `erp_current_user` or `erp_auth`.
+
+6. **Edit/Delete in Fee Register (Role-Controlled)** -- Super Admin: can edit and delete any receipt. Admin: can edit but not delete. Others (Accountant, Teacher, etc.): view only. When editing a receipt, allow changing: payment mode, remarks, amount received, date. When deleting, show a confirmation dialog.
 
 ### Modify
-
-- `Academics.tsx`: Add a 5th tab "Class Teachers" with the assignment UI
-- `Students.tsx`: Add `session` and `prevSessionDues` fields to the Student interface; update demoData migration to stamp session
-- `Fees.tsx`: 
-  - Add `session` field to PaymentRecord
-  - In Dues Fees tab: show previous session month-wise dues section when `student.prevSessionDues` exists
-  - Ledger balance to include prevSessionDues total
-- `App.tsx`: Add route `/promote` and sidebar entry "Promote Students" under Students section
-- `Sidebar.tsx`: Add "Promote Students" navigation item
-- `demoData.ts`: Add session field to demo students
+- **PromoteStudents**: Session data already archiving correctly. Ensure the session list in the new switcher reads all archive keys.
+- **Teacher Timetable period config**: Replace single-duration field with per-period individual duration fields + interval/break time field.
+- **Save dialog in CollectFees**: Both Print and WhatsApp buttons are independent -- clicking Print opens print modal, clicking WhatsApp opens WhatsApp send flow. Dialog stays open until user explicitly closes it (add a "Done" / Close button).
 
 ### Remove
-
-- Nothing removed
+- Nothing removed.
 
 ## Implementation Plan
 
-1. Add `session` and `prevSessionDues` fields to Student interface in `Students.tsx`; add migration code to stamp existing records with "2025-26"
-2. Add `session` field to PaymentRecord in `Fees.tsx`; migrate existing records
-3. Create new `ClassTeachersTab` component inside `Academics.tsx` — grid of all sections with teacher dropdown, conflict check on save (block if section already assigned to different teacher)
-4. Create new page `src/frontend/src/pages/PromoteStudents.tsx` with 4-step wizard:
-   - Step 1: current session display + new session input
-   - Step 2: class-section checklist with student counts
-   - Step 3: review table (student name, current class+section, next class+section, dues amount)
-   - Step 4: confirm & execute — archive, promote, carry forward dues
-5. In `Fees.tsx` Dues Fees tab: add "Previous Session Dues" section below existing dues grid when `student.prevSessionDues` is populated
-6. Add `/promote` route to `App.tsx`
-7. Add "Promote Students" entry to `Sidebar.tsx`
-8. Validate and build
+1. **Session Switcher component** (`src/frontend/src/components/layout/SessionSwitcher.tsx`):
+   - Reads all localStorage keys starting with `erp_session_archive_` to build session list
+   - Adds current active session from `erp_settings.session`
+   - Stores selected viewing session in a React context or local state (passed down)
+   - When a non-current session is selected, shows a banner "Viewing archived session: 2025-26 (Read Only)"
+   - Integrate into Header.tsx as a dropdown next to the school name
+   - Relevant pages (Students, Fees) check the selected session and load from archive if not current
+
+2. **Per-Period Duration in TeacherTimetable.tsx**:
+   - In Step 2 (Period Config), replace `periodDuration` single field with an array `periodDurations[]` -- one duration input per period (e.g., P1: 45 min, P2: 30 min, etc.)
+   - Add `intervalMinutes` field for break/interval time between periods
+   - Period timing preview recalculates: P1 starts at `startTime`, ends at `startTime + periodDurations[0]`, P2 starts at `P1_end + intervalMinutes`, etc.
+   - Save these per-period durations so the generated timetable display shows accurate timing
+
+3. **Collect Fees Save Dialog** (`Fees.tsx`, `CollectFeesTab`):
+   - Change `showSaveDialog` modal to show both Print Receipt and Send WhatsApp as separate independent buttons
+   - Both can be clicked; state tracks which have been activated
+   - Add a "Close" or "Done" button to dismiss
+   - Receipt is already saved when dialog opens; Print/WhatsApp are post-save actions
+
+4. **Payment History section in CollectFees** (`Fees.tsx`):
+   - Below the fee grid / other charges section (when a student is loaded), render a `PaymentHistory` component
+   - Reads `erp_fee_payments` filtered by student admNo
+   - Shows table: Date | Receipt No. | Months | Amount | Mode | Received By
+   - `receivedBy` field: when saving a payment, store the logged-in user's name+role (read from `erp_current_user` or `erp_auth` localStorage)
+   - Update `PaymentRecord` interface to include `receivedBy: string`
+   - When saving a new payment, populate `receivedBy` from current user
+
+5. **Fee Register drill-down + edit/delete** (`Fees.tsx`, Fee Register tab):
+   - Each row gets a clickable details icon or entire row clickable
+   - Opens a modal/drawer: `FeeRegisterDetailModal` showing full student payment history
+   - Role check: read from `erp_current_user` to get role
+   - Super Admin: show Edit + Delete buttons
+   - Admin: show Edit button only
+   - Others: view only
+   - Edit modal: form to change paymentMode, remarks, receiptAmt, date -- saves back to `erp_fee_payments`
+   - Delete: confirmation dialog, removes from `erp_fee_payments`
+   - After edit/delete, refresh the register list
