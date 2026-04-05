@@ -15,7 +15,11 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { addERPNotification } from "../components/layout/Header";
-import { getAllCredentials, useAuth } from "../context/AuthContext";
+import {
+  generateCredentialsFromData,
+  getAllCredentials,
+  useAuth,
+} from "../context/AuthContext";
 import { StudentAdmissionForm } from "./StudentAdmissionForm";
 
 interface Student {
@@ -3020,6 +3024,8 @@ export function Students() {
         message: `${newStudent.name} admitted to ${newStudent.className} - ${newStudent.section}`,
       });
     }
+    // Auto-generate credentials for new/updated student
+    setTimeout(() => generateCredentialsFromData(), 100);
     setEditStudent(null);
     setShowAdmissionForm(false);
   };

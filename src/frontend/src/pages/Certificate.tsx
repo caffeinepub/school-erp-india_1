@@ -25,10 +25,15 @@ import {
   FileText,
   IdCard,
   Move,
+  Palette,
   Printer,
   RotateCcw,
   Save,
+  Settings2,
+  Star,
+  Upload,
   Users,
+  X as XIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -1766,6 +1771,22 @@ function StaffCardTB({
 
 // ─── Student ID Card Tab ──────────────────────────────────────────────────────
 
+const ALL_ID_FIELDS = [
+  { key: "photo", label: "Photo" },
+  { key: "name", label: "Student Name" },
+  { key: "fatherName", label: "Father Name" },
+  { key: "className", label: "Class" },
+  { key: "section", label: "Section" },
+  { key: "rollNo", label: "Roll No" },
+  { key: "dob", label: "Date of Birth" },
+  { key: "blood", label: "Blood Group" },
+  { key: "admNo", label: "Adm. No" },
+  { key: "contact", label: "Contact" },
+  { key: "schoolName", label: "School Name" },
+  { key: "validTill", label: "Valid Till" },
+  { key: "qrCode", label: "QR Code" },
+];
+
 function StudentIDTab() {
   const [template, setTemplate] = useState<"t1" | "t2" | "t3" | "t4">("t1");
   const [students, setStudents] = useState<Student[]>(() =>
@@ -1775,6 +1796,81 @@ function StudentIDTab() {
   const [editMode, setEditMode] = useState(false);
   const [bulkModal, setBulkModal] = useState(false);
   const [bulkClass, setBulkClass] = useState("");
+
+  // ─ ID Card Customizer State ─
+  const [showCustomizer, setShowCustomizer] = useState(false);
+  const [bgImages, setBgImages] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("idcard_bg_images") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [visibleFields, setVisibleFields] = useState<Record<string, string[]>>(
+    () => {
+      try {
+        return JSON.parse(
+          localStorage.getItem("idcard_visible_fields") || "{}",
+        );
+      } catch {
+        return {};
+      }
+    },
+  );
+  const [fontSizes, setFontSizes] = useState<Record<string, number>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("idcard_font_sizes") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [fontColors, setFontColors] = useState<Record<string, string>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("idcard_font_colors") || "{}");
+    } catch {
+      return {};
+    }
+  });
+  const [defaultTemplate, setDefaultTemplate] = useState<string>(
+    () => localStorage.getItem("idcard_default_template") || "t1",
+  );
+  const bgFileRef = useRef<HTMLInputElement>(null);
+
+  const custKey = `student_${template}`;
+  const curBg = bgImages[custKey] || "";
+  const curVisible = visibleFields[custKey] || ALL_ID_FIELDS.map((f) => f.key);
+  const curFontSize = fontSizes[custKey] || 10;
+  const curFontColor = fontColors[custKey] || "#1e293b";
+
+  function saveCustomization() {
+    localStorage.setItem("idcard_bg_images", JSON.stringify(bgImages));
+    localStorage.setItem(
+      "idcard_visible_fields",
+      JSON.stringify(visibleFields),
+    );
+    localStorage.setItem("idcard_font_sizes", JSON.stringify(fontSizes));
+    localStorage.setItem("idcard_font_colors", JSON.stringify(fontColors));
+    localStorage.setItem("idcard_default_template", defaultTemplate);
+  }
+
+  function handleBgUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const b64 = ev.target?.result as string;
+      setBgImages((prev) => ({ ...prev, [custKey]: b64 }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function toggleField(fieldKey: string) {
+    const cur = visibleFields[custKey] || ALL_ID_FIELDS.map((f) => f.key);
+    const next = cur.includes(fieldKey)
+      ? cur.filter((k) => k !== fieldKey)
+      : [...cur, fieldKey];
+    setVisibleFields((prev) => ({ ...prev, [custKey]: next }));
+  }
 
   // Load fresh data and handle pre-selection from Students page
   useEffect(() => {
@@ -1864,7 +1960,7 @@ function StudentIDTab() {
           <Label className="text-gray-400 text-xs mb-1 block">
             Select Template
           </Label>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {(["t1", "t2", "t3", "t4"] as const).map((t) => (
               <button
                 key={t}
@@ -1873,12 +1969,15 @@ function StudentIDTab() {
                   setTemplate(t);
                   setEditMode(false);
                 }}
-                className={`px-3 py-1.5 rounded text-xs font-medium border transition ${
+                className={`px-3 py-1.5 rounded text-xs font-medium border transition flex items-center gap-1 ${
                   template === t
                     ? "bg-blue-600 border-blue-500 text-white"
                     : "bg-gray-800 border-gray-600 text-gray-300 hover:border-gray-400"
                 }`}
               >
+                {defaultTemplate === t && (
+                  <Star className="w-3 h-3 text-yellow-400" />
+                )}
                 {t === "t1"
                   ? "Size 1 (105×145mm)"
                   : t === "t2"
@@ -1944,6 +2043,16 @@ function StudentIDTab() {
           </Button>
           <Button
             size="sm"
+            variant="outline"
+            onClick={() => setShowCustomizer((v) => !v)}
+            className="border-purple-600 text-purple-300 hover:bg-purple-900/30"
+            data-ocid="cert.student.open_modal_button"
+          >
+            <Settings2 className="w-3 h-3 mr-1" />
+            Customize
+          </Button>
+          <Button
+            size="sm"
             onClick={() => setBulkModal(true)}
             className="bg-blue-600 hover:bg-blue-700"
             data-ocid="cert.student.secondary_button"
@@ -1953,6 +2062,198 @@ function StudentIDTab() {
           </Button>
         </div>
       </div>
+
+      {/* Customizer Panel */}
+      {showCustomizer && (
+        <div
+          className="rounded-xl p-5 border"
+          style={{ background: "#12172a", border: "1px solid #4c1d95" }}
+          data-ocid="cert.student.panel"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Palette className="w-4 h-4 text-purple-400" />
+              <h4 className="text-purple-200 font-semibold text-sm">
+                ID Card Customizer — {template.toUpperCase()}
+              </h4>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowCustomizer(false)}
+              className="text-gray-400 hover:text-white"
+              data-ocid="cert.student.close_button"
+            >
+              <XIcon size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-5">
+            {/* Background Image */}
+            <div>
+              <p className="text-gray-400 text-xs font-medium mb-2 flex items-center gap-1">
+                <Upload size={12} /> Background Image
+              </p>
+              {curBg ? (
+                <div className="relative">
+                  <img
+                    src={curBg}
+                    alt="bg"
+                    className="w-full h-24 object-cover rounded-lg border border-gray-600 mb-1"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setBgImages((prev) => {
+                        const n = { ...prev };
+                        delete n[custKey];
+                        return n;
+                      })
+                    }
+                    className="absolute top-1 right-1 bg-red-600 hover:bg-red-500 rounded-full p-0.5 text-white"
+                  >
+                    <XIcon size={10} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="w-full h-24 rounded-lg border-2 border-dashed border-gray-600 flex flex-col items-center justify-center cursor-pointer hover:border-purple-500 transition"
+                  onClick={() => bgFileRef.current?.click()}
+                >
+                  <Upload size={16} className="text-gray-500 mb-1" />
+                  <span className="text-gray-500 text-[10px]">
+                    Click to upload
+                  </span>
+                </button>
+              )}
+              <input
+                ref={bgFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleBgUpload}
+              />
+              {!curBg && (
+                <button
+                  type="button"
+                  onClick={() => bgFileRef.current?.click()}
+                  className="mt-1 w-full text-[10px] text-purple-400 hover:text-purple-300 underline"
+                  data-ocid="cert.student.upload_button"
+                >
+                  Upload background image
+                </button>
+              )}
+            </div>
+
+            {/* Font Controls */}
+            <div>
+              <p className="text-gray-400 text-xs font-medium mb-2 flex items-center gap-1">
+                <Palette size={12} /> Font Style
+              </p>
+              <div className="space-y-3">
+                <div>
+                  <div className="flex justify-between text-xs text-gray-400 mb-1">
+                    <span>Font Size</span>
+                    <span className="text-white">{curFontSize}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={8}
+                    max={18}
+                    value={curFontSize}
+                    onChange={(e) =>
+                      setFontSizes((prev) => ({
+                        ...prev,
+                        [custKey]: Number(e.target.value),
+                      }))
+                    }
+                    className="w-full accent-purple-500"
+                    data-ocid="cert.student.input"
+                  />
+                  <div className="flex justify-between text-[9px] text-gray-600">
+                    <span>8px</span>
+                    <span>18px</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs mb-1">Font Color</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={curFontColor}
+                      onChange={(e) =>
+                        setFontColors((prev) => ({
+                          ...prev,
+                          [custKey]: e.target.value,
+                        }))
+                      }
+                      className="w-8 h-8 rounded cursor-pointer border border-gray-600"
+                      data-ocid="cert.student.input"
+                    />
+                    <span className="text-gray-400 text-xs font-mono">
+                      {curFontColor}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Field Checkboxes */}
+            <div>
+              <p className="text-gray-400 text-xs font-medium mb-2">
+                Visible Fields
+              </p>
+              <div className="grid grid-cols-2 gap-1">
+                {ALL_ID_FIELDS.map((f) => (
+                  <label
+                    key={f.key}
+                    className="flex items-center gap-1.5 cursor-pointer group"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={curVisible.includes(f.key)}
+                      onChange={() => toggleField(f.key)}
+                      className="accent-purple-500"
+                      data-ocid="cert.student.checkbox"
+                    />
+                    <span className="text-gray-300 text-[10px] group-hover:text-white">
+                      {f.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-700">
+            <button
+              type="button"
+              onClick={() => {
+                setDefaultTemplate(template);
+                localStorage.setItem("idcard_default_template", template);
+              }}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border transition ${defaultTemplate === template ? "border-yellow-500 text-yellow-400 bg-yellow-900/20" : "border-gray-600 text-gray-400 hover:border-yellow-500 hover:text-yellow-400"}`}
+              data-ocid="cert.student.toggle"
+            >
+              <Star size={12} />
+              {defaultTemplate === template
+                ? "⭐ Default Template"
+                : "Set as Default"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                saveCustomization();
+                setShowCustomizer(false);
+              }}
+              className="flex items-center gap-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs px-4 py-1.5 rounded"
+              data-ocid="cert.student.save_button"
+            >
+              <Save size={12} />
+              Save Customization
+            </button>
+          </div>
+        </div>
+      )}
 
       {editMode && (
         <div className="bg-amber-900/20 border border-amber-700/40 rounded-lg px-4 py-2 text-amber-300 text-xs flex items-center gap-2">

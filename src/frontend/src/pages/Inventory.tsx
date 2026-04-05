@@ -10,6 +10,8 @@ interface InventoryItem {
   quantity: number;
   unit: string;
   reorderLevel: number;
+  sellPrice: number;
+  purchasePrice: number;
 }
 
 interface IssueRecord {
@@ -24,6 +26,31 @@ interface IssueRecord {
   returned: boolean;
 }
 
+interface PurchaseRecord {
+  id: number;
+  itemId: number;
+  itemName: string;
+  quantity: number;
+  purchasePrice: number;
+  totalCost: number;
+  supplier: string;
+  date: string;
+  invoiceNo: string;
+}
+
+interface SaleRecord {
+  id: number;
+  itemId: number;
+  itemName: string;
+  quantity: number;
+  sellPrice: number;
+  totalAmount: number;
+  buyerName: string;
+  buyerType: "Student" | "Staff";
+  date: string;
+  paymentMode: "Cash" | "Online";
+}
+
 interface Category {
   id: number;
   name: string;
@@ -34,161 +61,135 @@ interface Store {
   location: string;
 }
 
-const DEMO_ITEMS: InventoryItem[] = [
+const INITIAL_ITEMS: InventoryItem[] = [
   {
     id: 1,
+    name: "School Dress (Full)",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 100,
+    unit: "Pcs",
+    reorderLevel: 20,
+    sellPrice: 450,
+    purchasePrice: 320,
+  },
+  {
+    id: 2,
+    name: "School Dress (Half)",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 80,
+    unit: "Pcs",
+    reorderLevel: 20,
+    sellPrice: 380,
+    purchasePrice: 260,
+  },
+  {
+    id: 3,
+    name: "School Tie",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 150,
+    unit: "Pcs",
+    reorderLevel: 30,
+    sellPrice: 80,
+    purchasePrice: 45,
+  },
+  {
+    id: 4,
+    name: "School Belt",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 120,
+    unit: "Pcs",
+    reorderLevel: 25,
+    sellPrice: 60,
+    purchasePrice: 35,
+  },
+  {
+    id: 5,
+    name: "School Socks (Pair)",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 200,
+    unit: "Pairs",
+    reorderLevel: 40,
+    sellPrice: 50,
+    purchasePrice: 30,
+  },
+  {
+    id: 6,
+    name: "School Shoes",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 60,
+    unit: "Pairs",
+    reorderLevel: 15,
+    sellPrice: 600,
+    purchasePrice: 420,
+  },
+  {
+    id: 7,
+    name: "School Bag",
+    category: "Uniform",
+    store: "Uniform Store",
+    quantity: 50,
+    unit: "Pcs",
+    reorderLevel: 10,
+    sellPrice: 750,
+    purchasePrice: 520,
+  },
+  {
+    id: 8,
     name: "A4 Paper Ream",
     category: "Stationery",
     store: "Main Store",
     quantity: 150,
     unit: "Reams",
     reorderLevel: 20,
+    sellPrice: 0,
+    purchasePrice: 280,
   },
   {
-    id: 2,
+    id: 9,
     name: "Ballpoint Pens (Blue)",
     category: "Stationery",
     store: "Main Store",
     quantity: 500,
     unit: "Pcs",
     reorderLevel: 50,
+    sellPrice: 10,
+    purchasePrice: 6,
   },
   {
-    id: 3,
+    id: 10,
     name: "Football",
     category: "Sports",
     store: "Sports Room",
     quantity: 8,
     unit: "Pcs",
     reorderLevel: 5,
-  },
-  {
-    id: 4,
-    name: "Cricket Kit",
-    category: "Sports",
-    store: "Sports Room",
-    quantity: 3,
-    unit: "Sets",
-    reorderLevel: 2,
-  },
-  {
-    id: 5,
-    name: "Bunsen Burner",
-    category: "Lab Equipment",
-    store: "Science Lab",
-    quantity: 12,
-    unit: "Pcs",
-    reorderLevel: 5,
-  },
-  {
-    id: 6,
-    name: "Microscope",
-    category: "Lab Equipment",
-    store: "Science Lab",
-    quantity: 6,
-    unit: "Pcs",
-    reorderLevel: 3,
-  },
-  {
-    id: 7,
-    name: "Student Desk",
-    category: "Furniture",
-    store: "Warehouse",
-    quantity: 45,
-    unit: "Pcs",
-    reorderLevel: 10,
-  },
-  {
-    id: 8,
-    name: "Whiteboard Marker",
-    category: "Stationery",
-    store: "Main Store",
-    quantity: 80,
-    unit: "Pcs",
-    reorderLevel: 20,
-  },
-  {
-    id: 9,
-    name: "Basketball",
-    category: "Sports",
-    store: "Sports Room",
-    quantity: 4,
-    unit: "Pcs",
-    reorderLevel: 3,
-  },
-  {
-    id: 10,
-    name: "Projector",
-    category: "Electronics",
-    store: "AV Room",
-    quantity: 5,
-    unit: "Pcs",
-    reorderLevel: 2,
-  },
-  {
-    id: 11,
-    name: "Chalk Box",
-    category: "Stationery",
-    store: "Main Store",
-    quantity: 30,
-    unit: "Boxes",
-    reorderLevel: 10,
-  },
-  {
-    id: 12,
-    name: "Beaker 250ml",
-    category: "Lab Equipment",
-    store: "Science Lab",
-    quantity: 20,
-    unit: "Pcs",
-    reorderLevel: 8,
-  },
-  {
-    id: 13,
-    name: "Office Chair",
-    category: "Furniture",
-    store: "Warehouse",
-    quantity: 15,
-    unit: "Pcs",
-    reorderLevel: 5,
-  },
-  {
-    id: 14,
-    name: "Printer Cartridge",
-    category: "Electronics",
-    store: "Office",
-    quantity: 6,
-    unit: "Pcs",
-    reorderLevel: 3,
-  },
-  {
-    id: 15,
-    name: "Art Brush Set",
-    category: "Art & Craft",
-    store: "Art Room",
-    quantity: 25,
-    unit: "Sets",
-    reorderLevel: 5,
+    sellPrice: 0,
+    purchasePrice: 480,
   },
 ];
 
-const DEMO_CATEGORIES: Category[] = [
-  { id: 1, name: "Stationery" },
-  { id: 2, name: "Sports" },
-  { id: 3, name: "Lab Equipment" },
-  { id: 4, name: "Furniture" },
-  { id: 5, name: "Electronics" },
-  { id: 6, name: "Art & Craft" },
+const INITIAL_CATEGORIES: Category[] = [
+  { id: 1, name: "Uniform" },
+  { id: 2, name: "Stationery" },
+  { id: 3, name: "Sports" },
+  { id: 4, name: "Lab Equipment" },
+  { id: 5, name: "Furniture" },
+  { id: 6, name: "Electronics" },
+  { id: 7, name: "Art & Craft" },
 ];
 
-const DEMO_STORES: Store[] = [
-  { id: 1, name: "Main Store", location: "Ground Floor, Block A" },
-  { id: 2, name: "Sports Room", location: "Sports Complex" },
-  { id: 3, name: "Science Lab", location: "Block B, 2nd Floor" },
-  { id: 4, name: "Warehouse", location: "Back Campus" },
-  { id: 5, name: "AV Room", location: "Block C, 1st Floor" },
-  { id: 6, name: "Art Room", location: "Block A, 1st Floor" },
-  { id: 7, name: "Office", location: "Admin Block" },
+const INITIAL_STORES: Store[] = [
+  { id: 1, name: "Uniform Store", location: "Ground Floor, Block A" },
+  { id: 2, name: "Main Store", location: "Ground Floor, Block A" },
+  { id: 3, name: "Sports Room", location: "Sports Complex" },
+  { id: 4, name: "Science Lab", location: "Block B, 2nd Floor" },
+  { id: 5, name: "Warehouse", location: "Back Campus" },
 ];
 
 function loadLS<T>(key: string, fallback: T): T {
@@ -213,20 +214,26 @@ function stockStatus(
 }
 
 export function Inventory() {
-  const [tab, setTab] = useState<"items" | "issue" | "categories" | "report">(
-    "items",
-  );
+  const [tab, setTab] = useState<
+    "items" | "purchase" | "sales" | "issue" | "categories" | "report"
+  >("items");
   const [items, setItems] = useState<InventoryItem[]>(() =>
-    loadLS("erp_inventory", DEMO_ITEMS),
+    loadLS("erp_inventory", INITIAL_ITEMS),
   );
   const [issues, setIssues] = useState<IssueRecord[]>(() =>
     loadLS("erp_inventory_issues", []),
   );
+  const [purchases, setPurchases] = useState<PurchaseRecord[]>(() =>
+    loadLS("erp_inventory_purchases", []),
+  );
+  const [sales, setSales] = useState<SaleRecord[]>(() =>
+    loadLS("erp_inventory_sales", []),
+  );
   const [categories, setCategories] = useState<Category[]>(() =>
-    loadLS("erp_inventory_cats", DEMO_CATEGORIES),
+    loadLS("erp_inventory_cats", INITIAL_CATEGORIES),
   );
   const [stores, setStores] = useState<Store[]>(() =>
-    loadLS("erp_inventory_stores", DEMO_STORES),
+    loadLS("erp_inventory_stores", INITIAL_STORES),
   );
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("");
@@ -236,11 +243,13 @@ export function Inventory() {
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [itemForm, setItemForm] = useState({
     name: "",
-    category: "Stationery",
-    store: "Main Store",
+    category: "Uniform",
+    store: "Uniform Store",
     quantity: "",
     unit: "Pcs",
     reorderLevel: "10",
+    sellPrice: "",
+    purchasePrice: "",
   });
 
   // Issue modal
@@ -252,6 +261,29 @@ export function Inventory() {
     recipientType: "Student" as "Student" | "Staff",
     date: new Date().toISOString().split("T")[0],
     returnDate: "",
+  });
+
+  // Purchase modal
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [purchaseForm, setPurchaseForm] = useState({
+    itemId: "",
+    quantity: "",
+    purchasePrice: "",
+    supplier: "",
+    invoiceNo: "",
+    date: new Date().toISOString().split("T")[0],
+  });
+
+  // Sale modal
+  const [showSaleModal, setShowSaleModal] = useState(false);
+  const [saleForm, setSaleForm] = useState({
+    itemId: "",
+    quantity: "",
+    sellPrice: "",
+    buyerName: "",
+    buyerType: "Student" as "Student" | "Staff",
+    date: new Date().toISOString().split("T")[0],
+    paymentMode: "Cash" as "Cash" | "Online",
   });
 
   // Category modal
@@ -268,6 +300,12 @@ export function Inventory() {
   useEffect(() => {
     localStorage.setItem("erp_inventory_issues", JSON.stringify(issues));
   }, [issues]);
+  useEffect(() => {
+    localStorage.setItem("erp_inventory_purchases", JSON.stringify(purchases));
+  }, [purchases]);
+  useEffect(() => {
+    localStorage.setItem("erp_inventory_sales", JSON.stringify(sales));
+  }, [sales]);
   useEffect(() => {
     localStorage.setItem("erp_inventory_cats", JSON.stringify(categories));
   }, [categories]);
@@ -292,6 +330,8 @@ export function Inventory() {
       ...itemForm,
       quantity: Number(itemForm.quantity) || 0,
       reorderLevel: Number(itemForm.reorderLevel) || 10,
+      sellPrice: Number(itemForm.sellPrice) || 0,
+      purchasePrice: Number(itemForm.purchasePrice) || 0,
     };
     if (editItem) {
       setItems((prev) =>
@@ -308,11 +348,95 @@ export function Inventory() {
     setEditItem(null);
     setItemForm({
       name: "",
-      category: "Stationery",
-      store: "Main Store",
+      category: "Uniform",
+      store: "Uniform Store",
       quantity: "",
       unit: "Pcs",
       reorderLevel: "10",
+      sellPrice: "",
+      purchasePrice: "",
+    });
+  };
+
+  const savePurchase = () => {
+    if (!purchaseForm.itemId || !purchaseForm.quantity) return;
+    const item = items.find((i) => i.id === Number(purchaseForm.itemId));
+    if (!item) return;
+    const qty = Number(purchaseForm.quantity);
+    const price = Number(purchaseForm.purchasePrice) || item.purchasePrice;
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === item.id ? { ...i, quantity: i.quantity + qty } : i,
+      ),
+    );
+    setPurchases((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        itemId: item.id,
+        itemName: item.name,
+        quantity: qty,
+        purchasePrice: price,
+        totalCost: price * qty,
+        supplier: purchaseForm.supplier,
+        date: purchaseForm.date,
+        invoiceNo: purchaseForm.invoiceNo,
+      },
+    ]);
+    toast.success(
+      `Purchased ${qty} ${item.name} from ${purchaseForm.supplier || "supplier"}`,
+    );
+    setShowPurchaseModal(false);
+    setPurchaseForm({
+      itemId: "",
+      quantity: "",
+      purchasePrice: "",
+      supplier: "",
+      invoiceNo: "",
+      date: new Date().toISOString().split("T")[0],
+    });
+  };
+
+  const saveSale = () => {
+    if (!saleForm.itemId || !saleForm.buyerName || !saleForm.quantity) return;
+    const item = items.find((i) => i.id === Number(saleForm.itemId));
+    if (!item) return;
+    const qty = Number(saleForm.quantity);
+    if (qty > item.quantity) {
+      toast.error("Insufficient stock");
+      return;
+    }
+    const price = Number(saleForm.sellPrice) || item.sellPrice;
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === item.id ? { ...i, quantity: i.quantity - qty } : i,
+      ),
+    );
+    setSales((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        itemId: item.id,
+        itemName: item.name,
+        quantity: qty,
+        sellPrice: price,
+        totalAmount: price * qty,
+        buyerName: saleForm.buyerName,
+        buyerType: saleForm.buyerType,
+        date: saleForm.date,
+        paymentMode: saleForm.paymentMode,
+      },
+    ]);
+    toast.success(`Sold ${qty} ${item.name} to ${saleForm.buyerName}`);
+    setShowSaleModal(false);
+    setSaleForm({
+      itemId: "",
+      quantity: "",
+      sellPrice: "",
+      buyerName: "",
+      buyerType: "Student",
+      date: new Date().toISOString().split("T")[0],
+      paymentMode: "Cash",
     });
   };
 
@@ -374,6 +498,32 @@ export function Inventory() {
 
   const lowStock = items.filter((i) => i.quantity <= i.reorderLevel);
   const totalQty = items.reduce((s, i) => s + i.quantity, 0);
+  const today = new Date().toISOString().split("T")[0];
+  const todaySales = sales
+    .filter((s) => s.date === today)
+    .reduce((sum, s) => sum + s.totalAmount, 0);
+
+  // When sale item changes, auto-fill price
+  const handleSaleItemChange = (itemId: string) => {
+    const item = items.find((i) => i.id === Number(itemId));
+    setSaleForm((p) => ({
+      ...p,
+      itemId,
+      sellPrice: item ? String(item.sellPrice) : "",
+    }));
+  };
+
+  const handlePurchaseItemChange = (itemId: string) => {
+    const item = items.find((i) => i.id === Number(itemId));
+    setPurchaseForm((p) => ({
+      ...p,
+      itemId,
+      purchasePrice: item ? String(item.purchasePrice) : "",
+    }));
+  };
+
+  const inputCls =
+    "w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-green-500";
 
   return (
     <div>
@@ -384,7 +534,7 @@ export function Inventory() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-5 gap-3 mb-4">
         {[
           { label: "Total Items", value: items.length, color: "text-white" },
           { label: "Total Quantity", value: totalQty, color: "text-blue-400" },
@@ -398,6 +548,11 @@ export function Inventory() {
             value: issues.filter((i) => !i.returned).length,
             color: "text-yellow-400",
           },
+          {
+            label: "Today's Sales",
+            value: `₹${todaySales.toLocaleString("en-IN")}`,
+            color: "text-green-400",
+          },
         ].map((k) => (
           <div
             key={k.label}
@@ -405,13 +560,22 @@ export function Inventory() {
             style={{ background: "#1a1f2e", border: "1px solid #374151" }}
           >
             <p className="text-gray-400 text-xs">{k.label}</p>
-            <p className={`${k.color} text-2xl font-bold`}>{k.value}</p>
+            <p className={`${k.color} text-xl font-bold`}>{k.value}</p>
           </div>
         ))}
       </div>
 
       <div className="flex flex-wrap gap-1 mb-4">
-        {(["items", "issue", "categories", "report"] as const).map((t) => (
+        {(
+          [
+            "items",
+            "purchase",
+            "sales",
+            "issue",
+            "categories",
+            "report",
+          ] as const
+        ).map((t) => (
           <button
             key={t}
             type="button"
@@ -421,11 +585,15 @@ export function Inventory() {
           >
             {t === "items"
               ? "Stock Items"
-              : t === "issue"
-                ? "Issue / Return"
-                : t === "categories"
-                  ? "Categories & Stores"
-                  : "Stock Report"}
+              : t === "purchase"
+                ? "Purchase"
+                : t === "sales"
+                  ? "Sales"
+                  : t === "issue"
+                    ? "Issue / Return"
+                    : t === "categories"
+                      ? "Categories & Stores"
+                      : "Stock Report"}
           </button>
         ))}
       </div>
@@ -460,11 +628,13 @@ export function Inventory() {
                 setEditItem(null);
                 setItemForm({
                   name: "",
-                  category: "Stationery",
-                  store: "Main Store",
+                  category: "Uniform",
+                  store: "Uniform Store",
                   quantity: "",
                   unit: "Pcs",
                   reorderLevel: "10",
+                  sellPrice: "",
+                  purchasePrice: "",
                 });
                 setShowItemModal(true);
               }}
@@ -485,6 +655,8 @@ export function Inventory() {
                     "Store",
                     "Qty",
                     "Unit",
+                    "Sell Price",
+                    "Purchase Price",
                     "Reorder",
                     "Status",
                     "Actions",
@@ -502,7 +674,7 @@ export function Inventory() {
                 {filteredItems.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={9}
+                      colSpan={11}
                       className="px-3 py-8 text-center text-gray-500"
                       data-ocid="inventory.empty_state"
                     >
@@ -530,22 +702,30 @@ export function Inventory() {
                         <td className="px-3 py-2 text-gray-300">
                           {item.store}
                         </td>
-                        <td className="px-3 py-2 text-white font-semibold">
+                        <td className="px-3 py-2 text-yellow-400 font-bold">
                           {item.quantity}
                         </td>
                         <td className="px-3 py-2 text-gray-400">{item.unit}</td>
+                        <td className="px-3 py-2 text-green-400">
+                          {item.sellPrice > 0 ? `₹${item.sellPrice}` : "-"}
+                        </td>
+                        <td className="px-3 py-2 text-orange-400">
+                          {item.purchasePrice > 0
+                            ? `₹${item.purchasePrice}`
+                            : "-"}
+                        </td>
                         <td className="px-3 py-2 text-gray-400">
                           {item.reorderLevel}
                         </td>
                         <td className="px-3 py-2">
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] ${st.cls}`}
+                            className={`text-[10px] px-1.5 py-0.5 rounded ${st.cls}`}
                           >
                             {st.label}
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <div className="flex gap-2">
+                          <div className="flex gap-1">
                             <button
                               type="button"
                               onClick={() => {
@@ -557,13 +737,15 @@ export function Inventory() {
                                   quantity: String(item.quantity),
                                   unit: item.unit,
                                   reorderLevel: String(item.reorderLevel),
+                                  sellPrice: String(item.sellPrice),
+                                  purchasePrice: String(item.purchasePrice),
                                 });
                                 setShowItemModal(true);
                               }}
                               className="text-blue-400 hover:text-blue-300"
                               data-ocid={`inventory.edit_button.${i + 1}`}
                             >
-                              <Edit2 size={13} />
+                              <Edit2 size={12} />
                             </button>
                             <button
                               type="button"
@@ -571,12 +753,12 @@ export function Inventory() {
                                 setItems((prev) =>
                                   prev.filter((x) => x.id !== item.id),
                                 );
-                                toast.success("Deleted");
+                                toast.success("Item deleted");
                               }}
                               className="text-red-400 hover:text-red-300"
                               data-ocid={`inventory.delete_button.${i + 1}`}
                             >
-                              <Trash2 size={13} />
+                              <Trash2 size={12} />
                             </button>
                           </div>
                         </td>
@@ -590,10 +772,191 @@ export function Inventory() {
         </div>
       )}
 
+      {/* ─ PURCHASE ─ */}
+      {tab === "purchase" && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-gray-300 text-sm font-medium">
+              Purchase Records
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowPurchaseModal(true)}
+              data-ocid="inventory.purchase.primary_button"
+              className="flex items-center gap-1 bg-orange-600 hover:bg-orange-700 text-white text-xs px-3 py-1.5 rounded"
+            >
+              <Plus size={13} /> New Purchase
+            </button>
+          </div>
+          <div className="rounded-lg overflow-hidden border border-gray-700">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: "#1a1f2e" }}>
+                  {[
+                    "#",
+                    "Item",
+                    "Qty",
+                    "Purchase Price",
+                    "Total Cost",
+                    "Supplier",
+                    "Invoice No",
+                    "Date",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {purchases.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      className="px-3 py-8 text-center text-gray-500"
+                      data-ocid="inventory.purchase.empty_state"
+                    >
+                      No purchase records yet.
+                    </td>
+                  </tr>
+                ) : (
+                  purchases.map((p, i) => (
+                    <tr
+                      key={p.id}
+                      style={{
+                        background: i % 2 === 0 ? "#111827" : "#0f1117",
+                      }}
+                      data-ocid={`inventory.purchase.item.${i + 1}`}
+                    >
+                      <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                      <td className="px-3 py-2 text-white">{p.itemName}</td>
+                      <td className="px-3 py-2 text-yellow-400 font-medium">
+                        {p.quantity}
+                      </td>
+                      <td className="px-3 py-2 text-orange-400">
+                        ₹{p.purchasePrice}
+                      </td>
+                      <td className="px-3 py-2 text-red-400 font-medium">
+                        ₹{p.totalCost.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-3 py-2 text-gray-300">{p.supplier}</td>
+                      <td className="px-3 py-2 text-gray-400">
+                        {p.invoiceNo || "-"}
+                      </td>
+                      <td className="px-3 py-2 text-gray-400">{p.date}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ─ SALES ─ */}
+      {tab === "sales" && (
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-gray-300 text-sm font-medium">Sales Records</h3>
+            <button
+              type="button"
+              onClick={() => setShowSaleModal(true)}
+              data-ocid="inventory.sales.primary_button"
+              className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded"
+            >
+              <Plus size={13} /> New Sale
+            </button>
+          </div>
+          <div className="rounded-lg overflow-hidden border border-gray-700">
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: "#1a1f2e" }}>
+                  {[
+                    "#",
+                    "Item",
+                    "Qty",
+                    "Sell Price",
+                    "Total Amount",
+                    "Buyer",
+                    "Type",
+                    "Mode",
+                    "Date",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {sales.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="px-3 py-8 text-center text-gray-500"
+                      data-ocid="inventory.sales.empty_state"
+                    >
+                      No sales records yet.
+                    </td>
+                  </tr>
+                ) : (
+                  sales.map((s, i) => (
+                    <tr
+                      key={s.id}
+                      style={{
+                        background: i % 2 === 0 ? "#111827" : "#0f1117",
+                      }}
+                      data-ocid={`inventory.sales.item.${i + 1}`}
+                    >
+                      <td className="px-3 py-2 text-gray-500">{i + 1}</td>
+                      <td className="px-3 py-2 text-white">{s.itemName}</td>
+                      <td className="px-3 py-2 text-yellow-400 font-medium">
+                        {s.quantity}
+                      </td>
+                      <td className="px-3 py-2 text-green-400">
+                        ₹{s.sellPrice}
+                      </td>
+                      <td className="px-3 py-2 text-green-400 font-bold">
+                        ₹{s.totalAmount.toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-3 py-2 text-gray-300">{s.buyerName}</td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${s.buyerType === "Student" ? "bg-blue-900/40 text-blue-300" : "bg-purple-900/40 text-purple-300"}`}
+                        >
+                          {s.buyerType}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${s.paymentMode === "Cash" ? "bg-green-900/40 text-green-300" : "bg-blue-900/40 text-blue-300"}`}
+                        >
+                          {s.paymentMode}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-gray-400">{s.date}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ─ ISSUE / RETURN ─ */}
       {tab === "issue" && (
         <div>
-          <div className="flex justify-end mb-3">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-gray-300 text-sm font-medium">
+              Issue / Return Tracking
+            </h3>
             <button
               type="button"
               onClick={() => setShowIssueModal(true)}
@@ -698,17 +1061,16 @@ export function Inventory() {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-semibold text-sm">Categories</h3>
+              <h3 className="text-gray-300 text-sm font-medium">Categories</h3>
               <button
                 type="button"
                 onClick={() => {
                   setCatForm({ name: "", type: "category", location: "" });
                   setShowCatModal(true);
                 }}
-                data-ocid="inventory.categories.primary_button"
-                className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded"
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
               >
-                <Plus size={13} /> Add
+                <Plus size={12} /> Add
               </button>
             </div>
             <div className="space-y-2">
@@ -719,14 +1081,14 @@ export function Inventory() {
                   style={{ background: "#1a1f2e", border: "1px solid #374151" }}
                   data-ocid={`inventory.categories.item.${i + 1}`}
                 >
-                  <span className="text-gray-300 text-xs">{c.name}</span>
+                  <span className="text-gray-300 text-xs font-medium">
+                    {c.name}
+                  </span>
                   <button
                     type="button"
-                    onClick={() => {
-                      setCategories((prev) =>
-                        prev.filter((x) => x.id !== c.id),
-                      );
-                    }}
+                    onClick={() =>
+                      setCategories((prev) => prev.filter((x) => x.id !== c.id))
+                    }
                     className="text-red-400 hover:text-red-300"
                   >
                     <Trash2 size={13} />
@@ -737,18 +1099,16 @@ export function Inventory() {
           </div>
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-white font-semibold text-sm">
-                Stores / Locations
-              </h3>
+              <h3 className="text-gray-300 text-sm font-medium">Stores</h3>
               <button
                 type="button"
                 onClick={() => {
                   setCatForm({ name: "", type: "store", location: "" });
                   setShowCatModal(true);
                 }}
-                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded"
+                className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs px-2 py-1 rounded"
               >
-                <Plus size={13} /> Add
+                <Plus size={12} /> Add
               </button>
             </div>
             <div className="space-y-2">
@@ -769,9 +1129,9 @@ export function Inventory() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => {
-                      setStores((prev) => prev.filter((x) => x.id !== s.id));
-                    }}
+                    onClick={() =>
+                      setStores((prev) => prev.filter((x) => x.id !== s.id))
+                    }
                     className="text-red-400 hover:text-red-300"
                   >
                     <Trash2 size={13} />
@@ -882,7 +1242,7 @@ export function Inventory() {
               <table className="w-full text-xs">
                 <thead>
                   <tr style={{ background: "#1a1f2e" }}>
-                    {["Category", "Items", "Total Qty", "Low Stock Items"].map(
+                    {["Category", "Items", "Total Qty", "Low Stock"].map(
                       (h) => (
                         <th
                           key={h}
@@ -944,7 +1304,7 @@ export function Inventory() {
           data-ocid="inventory.modal"
         >
           <div
-            className="rounded-xl p-6 w-full max-w-md"
+            className="rounded-xl p-6 w-full max-w-lg"
             style={{ background: "#1a1f2e", border: "1px solid #374151" }}
           >
             <div className="flex items-center justify-between mb-4">
@@ -962,36 +1322,24 @@ export function Inventory() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
-                <label
-                  htmlFor="inv-name"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Item Name
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Item Name *</p>
                 <input
-                  id="inv-name"
                   value={itemForm.name}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-green-500"
-                  data-ocid="inventory.input"
+                  className={inputCls}
+                  placeholder="e.g. School Dress (Full)"
                 />
               </div>
               <div>
-                <label
-                  htmlFor="inv-cat"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Category
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Category</p>
                 <select
-                  id="inv-cat"
                   value={itemForm.category}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, category: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  className={inputCls}
                 >
                   {categories.map((c) => (
                     <option key={c.id}>{c.name}</option>
@@ -999,19 +1347,13 @@ export function Inventory() {
                 </select>
               </div>
               <div>
-                <label
-                  htmlFor="inv-store"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Store
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Store</p>
                 <select
-                  id="inv-store"
                   value={itemForm.store}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, store: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  className={inputCls}
                 >
                   {stores.map((s) => (
                     <option key={s.id}>{s.name}</option>
@@ -1019,53 +1361,69 @@ export function Inventory() {
                 </select>
               </div>
               <div>
-                <label
-                  htmlFor="inv-qty"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Quantity
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Quantity</p>
                 <input
-                  id="inv-qty"
                   type="number"
                   value={itemForm.quantity}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, quantity: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  className={inputCls}
                 />
               </div>
               <div>
-                <label
-                  htmlFor="inv-unit"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Unit
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Unit</p>
                 <input
-                  id="inv-unit"
                   value={itemForm.unit}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, unit: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  className={inputCls}
+                  placeholder="Pcs / Pairs / Reams"
                 />
               </div>
-              <div className="col-span-2">
-                <label
-                  htmlFor="inv-reorder"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Reorder Level
-                </label>
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">
+                  Sell Price (₹)
+                </p>
                 <input
-                  id="inv-reorder"
+                  type="number"
+                  value={itemForm.sellPrice}
+                  onChange={(e) =>
+                    setItemForm((p) => ({ ...p, sellPrice: e.target.value }))
+                  }
+                  className={inputCls}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">
+                  Purchase Price (₹)
+                </p>
+                <input
+                  type="number"
+                  value={itemForm.purchasePrice}
+                  onChange={(e) =>
+                    setItemForm((p) => ({
+                      ...p,
+                      purchasePrice: e.target.value,
+                    }))
+                  }
+                  className={inputCls}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">
+                  Reorder Level
+                </p>
+                <input
                   type="number"
                   value={itemForm.reorderLevel}
                   onChange={(e) =>
                     setItemForm((p) => ({ ...p, reorderLevel: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  className={inputCls}
                 />
               </div>
             </div>
@@ -1076,13 +1434,293 @@ export function Inventory() {
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded"
                 data-ocid="inventory.submit_button"
               >
-                {editItem ? "Update" : "Save"}
+                Save
               </button>
               <button
                 type="button"
                 onClick={() => setShowItemModal(false)}
-                className="flex-1 bg-gray-700 text-white text-xs py-2 rounded"
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded"
                 data-ocid="inventory.cancel_button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─ PURCHASE MODAL ─ */}
+      {showPurchaseModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          data-ocid="inventory.purchase.modal"
+        >
+          <div
+            className="rounded-xl p-6 w-full max-w-md"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold">Record Purchase</h3>
+              <button
+                type="button"
+                onClick={() => setShowPurchaseModal(false)}
+                className="text-gray-400 hover:text-white"
+                data-ocid="inventory.purchase.close_button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">
+                  Select Item *
+                </p>
+                <select
+                  value={purchaseForm.itemId}
+                  onChange={(e) => handlePurchaseItemChange(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">-- Select --</option>
+                  {items.map((i) => (
+                    <option key={i.id} value={i.id}>
+                      {i.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">Quantity *</p>
+                  <input
+                    type="number"
+                    value={purchaseForm.quantity}
+                    onChange={(e) =>
+                      setPurchaseForm((p) => ({
+                        ...p,
+                        quantity: e.target.value,
+                      }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">
+                    Purchase Price (₹)
+                  </p>
+                  <input
+                    type="number"
+                    value={purchaseForm.purchasePrice}
+                    onChange={(e) =>
+                      setPurchaseForm((p) => ({
+                        ...p,
+                        purchasePrice: e.target.value,
+                      }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">Supplier</p>
+                  <input
+                    value={purchaseForm.supplier}
+                    onChange={(e) =>
+                      setPurchaseForm((p) => ({
+                        ...p,
+                        supplier: e.target.value,
+                      }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">
+                    Invoice No.
+                  </p>
+                  <input
+                    value={purchaseForm.invoiceNo}
+                    onChange={(e) =>
+                      setPurchaseForm((p) => ({
+                        ...p,
+                        invoiceNo: e.target.value,
+                      }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <p className="text-gray-400 text-xs block mb-1">Date</p>
+                  <input
+                    type="date"
+                    value={purchaseForm.date}
+                    onChange={(e) =>
+                      setPurchaseForm((p) => ({ ...p, date: e.target.value }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={savePurchase}
+                className="flex-1 bg-orange-600 hover:bg-orange-700 text-white text-xs py-2 rounded"
+                data-ocid="inventory.purchase.submit_button"
+              >
+                Save Purchase
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPurchaseModal(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded"
+                data-ocid="inventory.purchase.cancel_button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─ SALE MODAL ─ */}
+      {showSaleModal && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
+          data-ocid="inventory.sales.modal"
+        >
+          <div
+            className="rounded-xl p-6 w-full max-w-md"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-semibold">Record Sale</h3>
+              <button
+                type="button"
+                onClick={() => setShowSaleModal(false)}
+                className="text-gray-400 hover:text-white"
+                data-ocid="inventory.sales.close_button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">
+                  Select Item *
+                </p>
+                <select
+                  value={saleForm.itemId}
+                  onChange={(e) => handleSaleItemChange(e.target.value)}
+                  className={inputCls}
+                >
+                  <option value="">-- Select --</option>
+                  {items
+                    .filter((i) => i.quantity > 0)
+                    .map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} (Stock: {i.quantity})
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">Quantity *</p>
+                  <input
+                    type="number"
+                    value={saleForm.quantity}
+                    onChange={(e) =>
+                      setSaleForm((p) => ({ ...p, quantity: e.target.value }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">
+                    Sell Price (₹)
+                  </p>
+                  <input
+                    type="number"
+                    value={saleForm.sellPrice}
+                    onChange={(e) =>
+                      setSaleForm((p) => ({ ...p, sellPrice: e.target.value }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">
+                    Buyer Name *
+                  </p>
+                  <input
+                    value={saleForm.buyerName}
+                    onChange={(e) =>
+                      setSaleForm((p) => ({ ...p, buyerName: e.target.value }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">Buyer Type</p>
+                  <select
+                    value={saleForm.buyerType}
+                    onChange={(e) =>
+                      setSaleForm((p) => ({
+                        ...p,
+                        buyerType: e.target.value as "Student" | "Staff",
+                      }))
+                    }
+                    className={inputCls}
+                  >
+                    <option>Student</option>
+                    <option>Staff</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">
+                    Payment Mode
+                  </p>
+                  <select
+                    value={saleForm.paymentMode}
+                    onChange={(e) =>
+                      setSaleForm((p) => ({
+                        ...p,
+                        paymentMode: e.target.value as "Cash" | "Online",
+                      }))
+                    }
+                    className={inputCls}
+                  >
+                    <option>Cash</option>
+                    <option>Online</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">Date</p>
+                  <input
+                    type="date"
+                    value={saleForm.date}
+                    onChange={(e) =>
+                      setSaleForm((p) => ({ ...p, date: e.target.value }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button
+                type="button"
+                onClick={saveSale}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded"
+                data-ocid="inventory.sales.submit_button"
+              >
+                Save Sale
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSaleModal(false)}
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded"
+                data-ocid="inventory.sales.cancel_button"
               >
                 Cancel
               </button>
@@ -1114,56 +1752,51 @@ export function Inventory() {
             </div>
             <div className="space-y-3">
               <div>
-                <label
-                  htmlFor="iss-item"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Select Item
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Select Item</p>
                 <select
-                  id="iss-item"
                   value={issueForm.itemId}
                   onChange={(e) =>
                     setIssueForm((p) => ({ ...p, itemId: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
-                  data-ocid="inventory.issue.select"
+                  className={inputCls}
                 >
                   <option value="">-- Select --</option>
-                  {items.map((it) => (
-                    <option key={it.id} value={it.id}>
-                      {it.name} (Qty: {it.quantity})
-                    </option>
-                  ))}
+                  {items
+                    .filter((i) => i.quantity > 0)
+                    .map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.name} (Stock: {i.quantity})
+                      </option>
+                    ))}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label
-                    htmlFor="iss-qty"
-                    className="text-gray-400 text-xs block mb-1"
-                  >
-                    Quantity
-                  </label>
+                  <p className="text-gray-400 text-xs block mb-1">Quantity</p>
                   <input
-                    id="iss-qty"
                     type="number"
                     value={issueForm.quantity}
                     onChange={(e) =>
                       setIssueForm((p) => ({ ...p, quantity: e.target.value }))
                     }
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor="iss-type"
-                    className="text-gray-400 text-xs block mb-1"
-                  >
+                  <p className="text-gray-400 text-xs block mb-1">Issued To</p>
+                  <input
+                    value={issueForm.issuedTo}
+                    onChange={(e) =>
+                      setIssueForm((p) => ({ ...p, issuedTo: e.target.value }))
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <p className="text-gray-400 text-xs block mb-1">
                     Recipient Type
-                  </label>
+                  </p>
                   <select
-                    id="iss-type"
                     value={issueForm.recipientType}
                     onChange={(e) =>
                       setIssueForm((p) => ({
@@ -1171,56 +1804,28 @@ export function Inventory() {
                         recipientType: e.target.value as "Student" | "Staff",
                       }))
                     }
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                    className={inputCls}
                   >
                     <option>Student</option>
                     <option>Staff</option>
                   </select>
                 </div>
-              </div>
-              <div>
-                <label
-                  htmlFor="iss-to"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Issued To (Name)
-                </label>
-                <input
-                  id="iss-to"
-                  value={issueForm.issuedTo}
-                  onChange={(e) =>
-                    setIssueForm((p) => ({ ...p, issuedTo: e.target.value }))
-                  }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label
-                    htmlFor="iss-date"
-                    className="text-gray-400 text-xs block mb-1"
-                  >
-                    Issue Date
-                  </label>
+                  <p className="text-gray-400 text-xs block mb-1">Issue Date</p>
                   <input
-                    id="iss-date"
                     type="date"
                     value={issueForm.date}
                     onChange={(e) =>
                       setIssueForm((p) => ({ ...p, date: e.target.value }))
                     }
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label
-                    htmlFor="iss-return"
-                    className="text-gray-400 text-xs block mb-1"
-                  >
-                    Expected Return
-                  </label>
+                  <p className="text-gray-400 text-xs block mb-1">
+                    Expected Return Date
+                  </p>
                   <input
-                    id="iss-return"
                     type="date"
                     value={issueForm.returnDate}
                     onChange={(e) =>
@@ -1229,7 +1834,7 @@ export function Inventory() {
                         returnDate: e.target.value,
                       }))
                     }
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                    className={inputCls}
                   />
                 </div>
               </div>
@@ -1246,7 +1851,7 @@ export function Inventory() {
               <button
                 type="button"
                 onClick={() => setShowIssueModal(false)}
-                className="flex-1 bg-gray-700 text-white text-xs py-2 rounded"
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded"
                 data-ocid="inventory.issue.cancel_button"
               >
                 Cancel
@@ -1256,12 +1861,9 @@ export function Inventory() {
         </div>
       )}
 
-      {/* ─ CAT/STORE MODAL ─ */}
+      {/* ─ CATEGORY/STORE MODAL ─ */}
       {showCatModal && (
-        <div
-          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50"
-          data-ocid="inventory.categories.modal"
-        >
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div
             className="rounded-xl p-6 w-full max-w-sm"
             style={{ background: "#1a1f2e", border: "1px solid #374151" }}
@@ -1274,43 +1876,30 @@ export function Inventory() {
                 type="button"
                 onClick={() => setShowCatModal(false)}
                 className="text-gray-400 hover:text-white"
-                data-ocid="inventory.categories.close_button"
               >
                 <X size={18} />
               </button>
             </div>
             <div className="space-y-3">
               <div>
-                <label
-                  htmlFor="cat-name"
-                  className="text-gray-400 text-xs block mb-1"
-                >
-                  Name
-                </label>
+                <p className="text-gray-400 text-xs block mb-1">Name *</p>
                 <input
-                  id="cat-name"
                   value={catForm.name}
                   onChange={(e) =>
                     setCatForm((p) => ({ ...p, name: e.target.value }))
                   }
-                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                  className={inputCls}
                 />
               </div>
               {catForm.type === "store" && (
                 <div>
-                  <label
-                    htmlFor="cat-loc"
-                    className="text-gray-400 text-xs block mb-1"
-                  >
-                    Location
-                  </label>
+                  <p className="text-gray-400 text-xs block mb-1">Location</p>
                   <input
-                    id="cat-loc"
                     value={catForm.location}
                     onChange={(e) =>
                       setCatForm((p) => ({ ...p, location: e.target.value }))
                     }
-                    className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+                    className={inputCls}
                   />
                 </div>
               )}
@@ -1335,19 +1924,19 @@ export function Inventory() {
                       },
                     ]);
                   }
-                  toast.success("Added");
                   setShowCatModal(false);
+                  toast.success(
+                    `${catForm.type === "category" ? "Category" : "Store"} added`,
+                  );
                 }}
-                className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs py-2 rounded"
-                data-ocid="inventory.categories.submit_button"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-2 rounded"
               >
                 Save
               </button>
               <button
                 type="button"
                 onClick={() => setShowCatModal(false)}
-                className="flex-1 bg-gray-700 text-white text-xs py-2 rounded"
-                data-ocid="inventory.categories.cancel_button"
+                className="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-2 rounded"
               >
                 Cancel
               </button>

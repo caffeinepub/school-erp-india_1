@@ -1,5 +1,7 @@
 import { Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { DateInput } from "../components/DateInput";
+import { generateCredentialsFromData } from "../context/AuthContext";
 
 interface StaffMember {
   id: number;
@@ -8,6 +10,7 @@ interface StaffMember {
   department: string;
   salary: number;
   contact: string;
+  dob: string;
   joinDate: string;
   status: "Active" | "Inactive";
 }
@@ -25,6 +28,7 @@ export function HumanResource() {
     department: "",
     salary: "",
     contact: "",
+    dob: "",
     joinDate: "",
   });
 
@@ -41,6 +45,7 @@ export function HumanResource() {
           department: s.department || "",
           salary: s.salary || 0,
           contact: s.contact || "",
+          dob: s.dob || "",
           joinDate: s.joiningDate || s.joinDate || "",
           status: s.status || "Active",
         }));
@@ -64,6 +69,7 @@ export function HumanResource() {
             department: s.department,
             salary: s.salary,
             contact: s.contact,
+            dob: s.dob,
             joiningDate: s.joinDate,
             status: s.status,
           })),
@@ -78,8 +84,13 @@ export function HumanResource() {
       ...prev,
       {
         id: prev.length + 1,
-        ...form,
+        name: form.name,
+        designation: form.designation,
+        department: form.department,
         salary: Number(form.salary) || 0,
+        contact: form.contact,
+        dob: form.dob,
+        joinDate: form.joinDate,
         status: "Active",
       },
     ]);
@@ -90,8 +101,11 @@ export function HumanResource() {
       department: "",
       salary: "",
       contact: "",
+      dob: "",
       joinDate: "",
     });
+    // Auto-generate credentials after adding staff
+    setTimeout(() => generateCredentialsFromData(), 100);
   };
 
   const totalPayroll = staff
@@ -170,6 +184,7 @@ export function HumanResource() {
                     "Department",
                     "Salary",
                     "Contact",
+                    "DOB",
                     "Join Date",
                     "Status",
                   ].map((h) => (
@@ -183,7 +198,7 @@ export function HumanResource() {
                 {filteredStaff.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="px-3 py-8 text-center text-gray-500"
                       data-ocid="hr.staff.empty_state"
                     >
@@ -212,6 +227,7 @@ export function HumanResource() {
                         ₹{s.salary.toLocaleString("en-IN")}
                       </td>
                       <td className="px-3 py-2 text-gray-400">{s.contact}</td>
+                      <td className="px-3 py-2 text-gray-400">{s.dob}</td>
                       <td className="px-3 py-2 text-gray-400">{s.joinDate}</td>
                       <td className="px-3 py-2">
                         <span className="bg-green-900/50 text-green-400 px-1.5 py-0.5 rounded text-[10px]">
@@ -334,7 +350,7 @@ export function HumanResource() {
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
           <div
-            className="rounded-xl p-6 w-full max-w-md"
+            className="rounded-xl p-6 w-full max-w-lg"
             style={{ background: "#1a1f2e", border: "1px solid #374151" }}
             data-ocid="hr.staff.modal"
           >
@@ -350,22 +366,22 @@ export function HumanResource() {
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
+              {/* Text fields */}
               {(
                 [
-                  "name",
-                  "designation",
-                  "department",
-                  "salary",
-                  "contact",
-                  "joinDate",
+                  ["name", "Name *"],
+                  ["designation", "Designation"],
+                  ["department", "Department"],
+                  ["salary", "Salary (₹)"],
+                  ["contact", "Contact / Mobile"],
                 ] as const
-              ).map((key) => (
+              ).map(([key, label]) => (
                 <div key={key}>
                   <label
                     htmlFor={`hr-${key}`}
-                    className="text-gray-400 text-xs block mb-1 capitalize"
+                    className="text-gray-400 text-xs block mb-1"
                   >
-                    {key.replace(/([A-Z])/g, " $1")}
+                    {label}
                   </label>
                   <input
                     id={`hr-${key}`}
@@ -378,6 +394,27 @@ export function HumanResource() {
                   />
                 </div>
               ))}
+              {/* DOB field with DateInput */}
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">
+                  Date of Birth
+                </p>
+                <DateInput
+                  value={form.dob}
+                  onChange={(v) => setForm((p) => ({ ...p, dob: v }))}
+                />
+              </div>
+              {/* Join Date field with DateInput */}
+              <div>
+                <p className="text-gray-400 text-xs block mb-1">Join Date</p>
+                <DateInput
+                  value={form.joinDate}
+                  onChange={(v) => setForm((p) => ({ ...p, joinDate: v }))}
+                />
+              </div>
+            </div>
+            <div className="mt-3 p-2 bg-blue-900/20 border border-blue-700/30 rounded text-xs text-blue-300">
+              💡 Username: Mobile No. &nbsp;|&nbsp; Password: DOB (ddmmyyyy)
             </div>
             <div className="flex gap-2 mt-4">
               <button

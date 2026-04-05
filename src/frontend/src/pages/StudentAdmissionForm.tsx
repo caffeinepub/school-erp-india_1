@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, Upload, X } from "lucide-react";
 import { useRef, useState } from "react";
+import { DateInput } from "../components/DateInput";
 
 interface StudentAdmissionFormProps {
   onCancel: () => void;
@@ -526,10 +527,9 @@ export function StudentAdmissionForm({
                 </div>
                 <div>
                   <FieldLabel label="Date Of Birth" required />
-                  <TextInput
+                  <DateInput
                     value={dob}
                     onChange={setDob}
-                    type="date"
                     error={errors.dob}
                     data-ocid="admission.dob_input"
                   />
@@ -582,11 +582,7 @@ export function StudentAdmissionForm({
                 </div>
                 <div>
                   <FieldLabel label="Admission Date" />
-                  <TextInput
-                    value={admDate}
-                    onChange={setAdmDate}
-                    type="date"
-                  />
+                  <DateInput value={admDate} onChange={setAdmDate} />
                 </div>
                 <div>
                   <FieldLabel label="Height (cm)" />
