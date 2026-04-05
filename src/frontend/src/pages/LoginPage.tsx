@@ -37,6 +37,7 @@ const ROLES: { value: Role; label: string; color: string }[] = [
   { value: "teacher", label: "Teacher", color: "bg-green-500" },
   { value: "parent", label: "Parent", color: "bg-purple-500" },
   { value: "student", label: "Student", color: "bg-cyan-500" },
+  { value: "driver", label: "Driver", color: "bg-teal-500" },
 ];
 
 const DEMO_CREDS: Record<Role, { userId: string; password: string }> = {
@@ -47,6 +48,7 @@ const DEMO_CREDS: Record<Role, { userId: string; password: string }> = {
   teacher: { userId: "teacher", password: "teacher123" },
   parent: { userId: "parent", password: "parent123" },
   student: { userId: "student", password: "student123" },
+  driver: { userId: "driver", password: "driver123" },
 };
 
 const FEATURE_ICONS = [BookOpen, Monitor, FlaskConical, Bus, Trophy, Building2];

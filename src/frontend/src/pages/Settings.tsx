@@ -3,10 +3,24 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Trash2 } from "lucide-react";
+import {
+  Bell,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Plus,
+  Shield,
+  Smartphone,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { DEMO_USERS, useAuth } from "../context/AuthContext";
+import {
+  DEMO_USERS,
+  getAllCredentials,
+  saveCredentials,
+  useAuth,
+} from "../context/AuthContext";
 import { useSchool } from "../context/SchoolContext";
 import { permissionModules } from "../data/permissions";
 import { getSchoolProfile, saveSchoolProfile } from "../data/schoolProfile";
@@ -334,6 +348,24 @@ export function Settings() {
             className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white"
           >
             Branches
+          </TabsTrigger>
+          <TabsTrigger
+            value="user-management"
+            className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+          >
+            User Mgmt
+          </TabsTrigger>
+          <TabsTrigger
+            value="online-payment"
+            className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+          >
+            Online Payment
+          </TabsTrigger>
+          <TabsTrigger
+            value="notification-scheduler"
+            className="text-xs data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+          >
+            Notifications
           </TabsTrigger>
         </TabsList>
 
@@ -1007,7 +1039,742 @@ export function Settings() {
             </div>
           </div>
         </TabsContent>
+        <TabsContent value="user-management">
+          <UserManagementTab />
+        </TabsContent>
+        <TabsContent value="online-payment">
+          <OnlinePaymentTab />
+        </TabsContent>
+        <TabsContent value="notification-scheduler">
+          <NotificationSchedulerTab />
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// USER MANAGEMENT TAB COMPONENT
+function UserManagementTab() {
+  const { user: currentUser, resetPassword } = useAuth();
+  const [search, setSearch] = useState("");
+  const [filterRole, setFilterRole] = useState("all");
+  const [resetModal, setResetModal] = useState<{
+    userId: string;
+    name: string;
+  } | null>(null);
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [pwdSuccess, setPwdSuccess] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+
+  const allCreds = getAllCredentials();
+  const DEMO_IDS = new Set(DEMO_USERS.map((u) => u.userId));
+  // Merge demo users with stored credentials
+  const allUsers = [
+    ...DEMO_USERS.map((u) => {
+      const stored = allCreds.find((c) => c.userId === u.userId);
+      return {
+        userId: u.userId,
+        name: u.name,
+        role: u.role,
+        password: stored?.password || u.password,
+      };
+    }),
+    ...allCreds
+      .filter((c) => !DEMO_IDS.has(c.userId))
+      .map((c) => ({
+        userId: c.userId,
+        name: c.name,
+        role: c.role,
+        password: c.password,
+      })),
+  ];
+
+  const filtered = allUsers.filter((u) => {
+    const matchSearch =
+      !search ||
+      u.name.toLowerCase().includes(search.toLowerCase()) ||
+      u.userId.toLowerCase().includes(search.toLowerCase());
+    const matchRole =
+      filterRole === "all" ||
+      u.role === filterRole ||
+      (filterRole === "students" && u.role === "student") ||
+      (filterRole === "teachers" && u.role === "teacher") ||
+      (filterRole === "parents" && u.role === "parent") ||
+      (filterRole === "staff" &&
+        ["admin", "accountant", "librarian", "super_admin", "driver"].includes(
+          u.role,
+        ));
+    return matchSearch && matchRole;
+  });
+
+  const ROLE_BADGE: Record<string, string> = {
+    super_admin: "bg-red-500/20 text-red-300 border-red-500/30",
+    admin: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+    accountant: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30",
+    librarian: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+    teacher: "bg-green-500/20 text-green-300 border-green-500/30",
+    parent: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    student: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30",
+    driver: "bg-teal-500/20 text-teal-300 border-teal-500/30",
+  };
+
+  const handleReset = () => {
+    setPwdError("");
+    if (!newPwd || !confirmPwd) {
+      setPwdError("Both fields required.");
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setPwdError("Passwords do not match.");
+      return;
+    }
+    if (newPwd.length < 4) {
+      setPwdError("Minimum 4 characters.");
+      return;
+    }
+    if (!resetModal) return;
+    const ok = resetPassword(resetModal.userId, newPwd);
+    if (ok) {
+      setPwdSuccess(true);
+      setTimeout(() => {
+        setResetModal(null);
+        setPwdSuccess(false);
+        setNewPwd("");
+        setConfirmPwd("");
+      }, 1500);
+    } else {
+      setPwdError("Could not reset password.");
+    }
+  };
+
+  if (currentUser?.role !== "super_admin" && currentUser?.role !== "admin") {
+    return (
+      <div className="text-gray-400 text-sm p-4">
+        Only Super Admin can manage users.
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg p-5"
+      style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+    >
+      <div className="flex items-center gap-2 mb-4">
+        <Shield size={16} className="text-orange-400" />
+        <h3 className="text-white text-sm font-medium">User Management</h3>
+        <span className="text-gray-500 text-xs ml-auto">
+          {filtered.length} users
+        </span>
+      </div>
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name or username..."
+          className="flex-1 min-w-[160px] bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-white text-xs outline-none focus:border-blue-500"
+          data-ocid="user_management.search_input"
+        />
+        <select
+          value={filterRole}
+          onChange={(e) => setFilterRole(e.target.value)}
+          className="bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none"
+          data-ocid="user_management.select"
+        >
+          <option value="all">All Roles</option>
+          <option value="students">Students</option>
+          <option value="teachers">Teachers</option>
+          <option value="parents">Parents</option>
+          <option value="staff">Staff</option>
+        </select>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr
+              style={{
+                background: "#111827",
+                borderBottom: "1px solid #1f2937",
+              }}
+            >
+              <th className="text-left py-2 px-3 text-gray-400 font-medium">
+                Name
+              </th>
+              <th className="text-left py-2 px-3 text-gray-400 font-medium">
+                Username
+              </th>
+              <th className="text-left py-2 px-3 text-gray-400 font-medium">
+                Role
+              </th>
+              <th className="text-left py-2 px-3 text-gray-400 font-medium">
+                Action
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.slice(0, 50).map((u, i) => (
+              <tr
+                key={u.userId}
+                style={{
+                  background: i % 2 === 0 ? "#0d111c" : "#111827",
+                  borderBottom: "1px solid #1f2937",
+                }}
+                data-ocid={`user_management.row.${i + 1}`}
+              >
+                <td className="py-2 px-3 text-white font-medium">{u.name}</td>
+                <td className="py-2 px-3 font-mono text-blue-300 text-[11px]">
+                  {u.userId}
+                </td>
+                <td className="py-2 px-3">
+                  <span
+                    className={`text-[10px] px-1.5 py-0.5 rounded border ${ROLE_BADGE[u.role] || "bg-gray-700 text-gray-300"}`}
+                  >
+                    {u.role.replace("_", " ")}
+                  </span>
+                </td>
+                <td className="py-2 px-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetModal({ userId: u.userId, name: u.name });
+                      setNewPwd("");
+                      setConfirmPwd("");
+                      setPwdError("");
+                      setPwdSuccess(false);
+                    }}
+                    className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 bg-blue-900/20 hover:bg-blue-900/30 border border-blue-700 rounded px-2 py-0.5 transition"
+                    data-ocid="user_management.edit_button"
+                  >
+                    <KeyRound size={11} /> Reset Pwd
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div
+            className="text-center py-8 text-gray-500"
+            data-ocid="user_management.empty_state"
+          >
+            No users found.
+          </div>
+        )}
+      </div>
+      {/* Reset Password Modal */}
+      {resetModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.7)" }}
+          data-ocid="user_management.dialog"
+        >
+          <div
+            className="rounded-xl p-6 w-full max-w-sm shadow-2xl"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <h3 className="text-white text-base font-semibold mb-1">
+              Reset Password
+            </h3>
+            <p className="text-gray-400 text-xs mb-4">
+              For:{" "}
+              <span className="text-white font-medium">{resetModal.name}</span>{" "}
+              ({resetModal.userId})
+            </p>
+            {pwdSuccess ? (
+              <div className="text-center py-6">
+                <div className="text-4xl mb-2">✅</div>
+                <p className="text-green-400 font-semibold">
+                  Password reset successfully!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="um-new-pwd"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    New Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="um-new-pwd"
+                      type={showPwd ? "text" : "password"}
+                      value={newPwd}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500 pr-8"
+                      data-ocid="user_management.input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    >
+                      {showPwd ? <EyeOff size={13} /> : <Eye size={13} />}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label
+                    htmlFor="um-conf-pwd"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    Confirm Password
+                  </label>
+                  <input
+                    id="um-conf-pwd"
+                    type="password"
+                    value={confirmPwd}
+                    onChange={(e) => setConfirmPwd(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleReset()}
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                    data-ocid="user_management.input"
+                  />
+                </div>
+                {pwdError && (
+                  <p
+                    className="text-red-400 text-xs"
+                    data-ocid="user_management.error_state"
+                  >
+                    {pwdError}
+                  </p>
+                )}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium transition"
+                    data-ocid="user_management.confirm_button"
+                  >
+                    Reset Password
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResetModal(null)}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded transition"
+                    data-ocid="user_management.cancel_button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ONLINE PAYMENT TAB COMPONENT
+function OnlinePaymentTab() {
+  const { user } = useAuth();
+  const [settings, setSettings] = useState(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("erp_payment_settings") || "{}",
+      ) as Record<string, { enabled: boolean; merchantId: string }>;
+    } catch {
+      return {};
+    }
+  });
+
+  const gateways = [
+    {
+      id: "gpay",
+      name: "GPay (Google Pay)",
+      icon: "🟢",
+      desc: "Accept UPI payments via Google Pay",
+    },
+    {
+      id: "razorpay",
+      name: "Razorpay",
+      icon: "🔵",
+      desc: "Cards, UPI, Netbanking via Razorpay",
+    },
+    {
+      id: "payu",
+      name: "PayU",
+      icon: "🟠",
+      desc: "Multiple payment methods via PayU",
+    },
+  ];
+
+  const toggle = (id: string) => {
+    setSettings((prev) => {
+      const updated = {
+        ...prev,
+        [id]: {
+          ...prev[id],
+          enabled: !prev[id]?.enabled,
+          merchantId: prev[id]?.merchantId || "",
+        },
+      };
+      localStorage.setItem("erp_payment_settings", JSON.stringify(updated));
+      toast.success(
+        `${id.toUpperCase()} ${updated[id].enabled ? "enabled" : "disabled"}`,
+      );
+      return updated;
+    });
+  };
+
+  const setMerchantId = (id: string, val: string) => {
+    setSettings((prev) => {
+      const updated = {
+        ...prev,
+        [id]: {
+          ...prev[id],
+          merchantId: val,
+          enabled: prev[id]?.enabled || false,
+        },
+      };
+      localStorage.setItem("erp_payment_settings", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  if (user?.role !== "super_admin") {
+    return (
+      <div className="text-gray-400 text-sm p-4">
+        Only Super Admin can configure payment settings.
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="rounded-lg p-5 max-w-2xl"
+      style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <Smartphone size={16} className="text-orange-400" />
+        <h3 className="text-white text-sm font-medium">
+          Online Payment Gateways
+        </h3>
+      </div>
+      <p className="text-gray-500 text-xs mb-5">
+        Enable payment gateways to allow students/parents to pay fees online via
+        UPI, cards, or net banking.
+      </p>
+      <div className="space-y-4">
+        {gateways.map((gw) => (
+          <div
+            key={gw.id}
+            className="rounded-lg p-4"
+            style={{ background: "#111827", border: "1px solid #1f2937" }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{gw.icon}</span>
+                <div>
+                  <p className="text-white text-sm font-medium">{gw.name}</p>
+                  <p className="text-gray-500 text-xs">{gw.desc}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => toggle(gw.id)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings[gw.id]?.enabled ? "bg-green-600" : "bg-gray-600"}`}
+                data-ocid="payment.toggle"
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings[gw.id]?.enabled ? "translate-x-6" : "translate-x-1"}`}
+                />
+              </button>
+            </div>
+            {settings[gw.id]?.enabled && (
+              <div className="mt-2">
+                <label
+                  htmlFor={`merchant-${gw.id}`}
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Merchant ID / API Key
+                </label>
+                <input
+                  id={`merchant-${gw.id}`}
+                  type="text"
+                  value={settings[gw.id]?.merchantId || ""}
+                  onChange={(e) => setMerchantId(gw.id, e.target.value)}
+                  placeholder={`Enter ${gw.name} merchant ID or key...`}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-white text-xs outline-none focus:border-green-500"
+                  data-ocid="payment.input"
+                />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 p-3 rounded bg-blue-900/20 border border-blue-800">
+        <p className="text-blue-300 text-xs">
+          ℹ️ When enabled, students and parents can pay fees online from the Fees
+          module. Payments are simulated in demo mode.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// NOTIFICATION SCHEDULER TAB COMPONENT
+interface SchedulerRule {
+  enabled: boolean;
+  timing?: string;
+  timingUnit?: string;
+  sendTo: string;
+  channel: string;
+}
+
+interface SchedulerSettings {
+  feeDue: SchedulerRule;
+  absentAlert: SchedulerRule;
+  examTimetable: SchedulerRule;
+  resultPublished: SchedulerRule;
+  birthdayWish: SchedulerRule;
+  generalNotice: SchedulerRule;
+  homeworkReminder: SchedulerRule;
+}
+
+const DEFAULT_SCHEDULER: SchedulerSettings = {
+  feeDue: {
+    enabled: false,
+    timing: "3",
+    timingUnit: "days",
+    sendTo: "parents",
+    channel: "both",
+  },
+  absentAlert: { enabled: false, sendTo: "parents", channel: "whatsapp" },
+  examTimetable: { enabled: false, sendTo: "all", channel: "rcs" },
+  resultPublished: { enabled: false, sendTo: "students", channel: "both" },
+  birthdayWish: {
+    enabled: false,
+    timing: "08:00",
+    sendTo: "student",
+    channel: "whatsapp",
+  },
+  generalNotice: { enabled: false, sendTo: "all", channel: "both" },
+  homeworkReminder: {
+    enabled: false,
+    timing: "1",
+    timingUnit: "days",
+    sendTo: "students",
+    channel: "rcs",
+  },
+};
+
+function NotificationSchedulerTab() {
+  const [rules, setRules] = useState<SchedulerSettings>(() => {
+    try {
+      const stored = JSON.parse(
+        localStorage.getItem("erp_notification_scheduler") || "{}",
+      ) as Partial<SchedulerSettings>;
+      return { ...DEFAULT_SCHEDULER, ...stored };
+    } catch {
+      return DEFAULT_SCHEDULER;
+    }
+  });
+
+  const update = (
+    key: keyof SchedulerSettings,
+    field: keyof SchedulerRule,
+    value: string | boolean,
+  ) => {
+    setRules((prev) => {
+      const updated = { ...prev, [key]: { ...prev[key], [field]: value } };
+      localStorage.setItem(
+        "erp_notification_scheduler",
+        JSON.stringify(updated),
+      );
+      return updated;
+    });
+  };
+
+  const activeCount = Object.values(rules).filter((r) => r.enabled).length;
+
+  const events = [
+    {
+      id: "feeDue" as const,
+      title: "Fee Due Reminder",
+      icon: "💰",
+      desc: "Send reminder before fee due date",
+      hasTiming: true,
+      timingLabel: "Days before due",
+    },
+    {
+      id: "absentAlert" as const,
+      title: "Absent Alert",
+      icon: "🚨",
+      desc: "Notify parents when student is absent",
+      hasTiming: false,
+    },
+    {
+      id: "examTimetable" as const,
+      title: "Exam Timetable Published",
+      icon: "📅",
+      desc: "Notify when exam timetable is published",
+      hasTiming: false,
+    },
+    {
+      id: "resultPublished" as const,
+      title: "Result Published",
+      icon: "📊",
+      desc: "Notify when exam results are out",
+      hasTiming: false,
+    },
+    {
+      id: "birthdayWish" as const,
+      title: "Birthday Wish",
+      icon: "🎂",
+      desc: "Auto-send birthday greetings",
+      hasTiming: true,
+      timingLabel: "Send at time",
+      isTime: true,
+    },
+    {
+      id: "generalNotice" as const,
+      title: "General Notice",
+      icon: "📢",
+      desc: "Manual trigger for general announcements",
+      hasTiming: false,
+    },
+    {
+      id: "homeworkReminder" as const,
+      title: "Homework Deadline Reminder",
+      icon: "📝",
+      desc: "Remind students before homework deadline",
+      hasTiming: true,
+      timingLabel: "Days before deadline",
+    },
+  ];
+
+  return (
+    <div className="max-w-2xl">
+      <div
+        className="rounded-lg p-4 mb-4 flex items-center justify-between"
+        style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+      >
+        <div className="flex items-center gap-2">
+          <Bell size={16} className="text-orange-400" />
+          <h3 className="text-white text-sm font-medium">
+            Notification Scheduler
+          </h3>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-400 text-xs">Active Rules:</span>
+          <span className="bg-green-900/50 text-green-400 text-xs px-2 py-0.5 rounded-full font-medium">
+            {activeCount}/7
+          </span>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {events.map((evt) => {
+          const rule = rules[evt.id];
+          return (
+            <div
+              key={evt.id}
+              className="rounded-lg p-4"
+              style={{
+                background: "#1a1f2e",
+                border: `1px solid ${rule.enabled ? "#16a34a40" : "#374151"}`,
+              }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start gap-2">
+                  <span className="text-xl mt-0.5">{evt.icon}</span>
+                  <div>
+                    <p className="text-white text-sm font-medium">
+                      {evt.title}
+                    </p>
+                    <p className="text-gray-500 text-xs">{evt.desc}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => update(evt.id, "enabled", !rule.enabled)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ml-2 ${rule.enabled ? "bg-green-600" : "bg-gray-600"}`}
+                  data-ocid="notification.toggle"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${rule.enabled ? "translate-x-6" : "translate-x-1"}`}
+                  />
+                </button>
+              </div>
+              {rule.enabled && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2 pt-2 border-t border-gray-700">
+                  {evt.hasTiming && (
+                    <div>
+                      <label
+                        htmlFor={`sched-timing-${evt.id}`}
+                        className="text-gray-500 text-[10px] block mb-1"
+                      >
+                        {evt.timingLabel}
+                      </label>
+                      <input
+                        id={`sched-timing-${evt.id}`}
+                        type={evt.isTime ? "time" : "number"}
+                        value={rule.timing || ""}
+                        onChange={(e) =>
+                          update(evt.id, "timing", e.target.value)
+                        }
+                        className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs outline-none focus:border-green-500"
+                        data-ocid="notification.input"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label
+                      htmlFor={`sched-sendto-${evt.id}`}
+                      className="text-gray-500 text-[10px] block mb-1"
+                    >
+                      Send To
+                    </label>
+                    <select
+                      id={`sched-sendto-${evt.id}`}
+                      value={rule.sendTo}
+                      onChange={(e) => update(evt.id, "sendTo", e.target.value)}
+                      className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs outline-none"
+                      data-ocid="notification.select"
+                    >
+                      <option value="all">All</option>
+                      <option value="parents">Parents</option>
+                      <option value="students">Students</option>
+                      <option value="teachers">Teachers</option>
+                      <option value="student">Student Only</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor={`sched-channel-${evt.id}`}
+                      className="text-gray-500 text-[10px] block mb-1"
+                    >
+                      Channel
+                    </label>
+                    <select
+                      id={`sched-channel-${evt.id}`}
+                      value={rule.channel}
+                      onChange={(e) =>
+                        update(evt.id, "channel", e.target.value)
+                      }
+                      className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1 text-white text-xs outline-none"
+                      data-ocid="notification.select"
+                    >
+                      <option value="whatsapp">WhatsApp</option>
+                      <option value="rcs">RCS</option>
+                      <option value="both">Both</option>
+                      <option value="sms">SMS</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 p-3 rounded bg-green-900/20 border border-green-800">
+        <p className="text-green-300 text-xs">
+          ✅ Settings auto-save when you toggle or change any rule.
+        </p>
+      </div>
     </div>
   );
 }

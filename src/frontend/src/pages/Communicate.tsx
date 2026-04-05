@@ -1,5 +1,6 @@
-import { MessageCircle, Plus, Search, X } from "lucide-react";
+import { MessageCircle, Plus, Search, Send, X } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
 interface Notice {
   id: number;
@@ -9,14 +10,57 @@ interface Notice {
   date: string;
 }
 
+interface RCSMessage {
+  id: string;
+  recipient: string;
+  preview: string;
+  dateTime: string;
+  status: "Delivered" | "Pending" | "Failed";
+}
+
+const RCS_TEMPLATES: Record<string, string> = {
+  "Fee Due Reminder":
+    "Dear Parent, this is a reminder that fees for {month} are due. Please pay at the earliest to avoid late charges. — SHUBH SCHOOL ERP",
+  "Absent Alert":
+    "Dear Parent, your child {name} was marked Absent today ({date}). Please inform the school if there is a reason. — SHUBH SCHOOL ERP",
+  "Exam Timetable":
+    "Dear {name}, the Exam Timetable for {exam} has been published. Please check the school portal for details. — SHUBH SCHOOL ERP",
+  "Result Published":
+    "Dear {name}, your exam results for {exam} are now available. Please check the school portal. — SHUBH SCHOOL ERP",
+  "Birthday Wish":
+    "🎂 Happy Birthday {name}! Wishing you a wonderful day filled with joy. — SHUBH SCHOOL ERP",
+  "General Notice":
+    "Dear Parent/Student, this is an important notice from the school. Please read the notice board or contact the office for details.",
+  "Homework Reminder":
+    "Dear Student, your homework for {subject} is due on {date}. Please submit on time. — SHUBH SCHOOL ERP",
+  Custom: "",
+};
+
 const initialNotices: Notice[] = [];
 
 export function Communicate() {
-  const [activeTab, setActiveTab] = useState<"notice" | "whatsapp">("notice");
+  const [activeTab, setActiveTab] = useState<"notice" | "rcs" | "whatsapp">(
+    "notice",
+  );
   const [notices, setNotices] = useState<Notice[]>(initialNotices);
   const [showModal, setShowModal] = useState(false);
   const [noticeSearch, setNoticeSearch] = useState("");
   const [form, setForm] = useState({ title: "", message: "", target: "All" });
+
+  // RCS state
+  const [rcsSendTo, setRcsSendTo] = useState("All Parents");
+  const [rcsTemplate, setRcsTemplate] = useState("General Notice");
+  const [rcsMessage, setRcsMessage] = useState(RCS_TEMPLATES["General Notice"]);
+  const [rcsSearch, setRcsSearch] = useState("");
+  const [rcsSent, setRcsSent] = useState<RCSMessage[]>(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("erp_rcs_messages") || "[]",
+      ) as RCSMessage[];
+    } catch {
+      return [];
+    }
+  });
 
   // Live filtered notices
   const filteredNotices = noticeSearch.trim()
@@ -39,6 +83,35 @@ export function Communicate() {
     setForm({ title: "", message: "", target: "All" });
   };
 
+  const handleSendRCS = () => {
+    if (!rcsMessage.trim()) {
+      toast.error("Please enter a message.");
+      return;
+    }
+    const newMsg: RCSMessage = {
+      id: Date.now().toString(),
+      recipient: rcsSendTo,
+      preview:
+        rcsMessage.substring(0, 80) + (rcsMessage.length > 80 ? "..." : ""),
+      dateTime: new Date().toLocaleString("en-IN"),
+      status: "Delivered",
+    };
+    setRcsSent((prev) => {
+      const updated = [newMsg, ...prev];
+      localStorage.setItem("erp_rcs_messages", JSON.stringify(updated));
+      return updated;
+    });
+    toast.success(`RCS Message sent to ${rcsSendTo}!`);
+  };
+
+  const filteredRcsSent = rcsSearch.trim()
+    ? rcsSent.filter(
+        (m) =>
+          m.recipient.toLowerCase().includes(rcsSearch.toLowerCase()) ||
+          m.preview.toLowerCase().includes(rcsSearch.toLowerCase()),
+      )
+    : rcsSent;
+
   return (
     <div>
       {/* Tabs */}
@@ -54,6 +127,19 @@ export function Communicate() {
           }`}
         >
           Notice Board
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("rcs")}
+          data-ocid="communicate.rcs.tab"
+          className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${
+            activeTab === "rcs"
+              ? "text-blue-400 border-blue-400"
+              : "text-gray-400 border-transparent hover:text-gray-200"
+          }`}
+        >
+          <span className="text-blue-400">📱</span>
+          RCS Messages
         </button>
         <button
           type="button"
@@ -100,7 +186,7 @@ export function Communicate() {
                 style={{ background: "#1a1f2e", border: "1px solid #374151" }}
                 data-ocid="communicate.notice.empty_state"
               >
-                No notices yet. Click "Add Notice" to publish one.
+                No notices yet. Click &ldquo;Add Notice&rdquo; to publish one.
               </div>
             )}
             {filteredNotices.map((n, i) => (
@@ -230,6 +316,201 @@ export function Communicate() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* RCS MESSAGES TAB */}
+      {activeTab === "rcs" && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-white text-lg font-semibold">
+                Google RCS Messages
+              </h2>
+              <p className="text-gray-500 text-xs">
+                Rich Communication Services &mdash; Simulated (Google Business
+                Messaging)
+              </p>
+            </div>
+            <span className="text-xs bg-blue-900/30 text-blue-300 border border-blue-700 px-2 py-1 rounded-full">
+              📡 Simulated
+            </span>
+          </div>
+
+          {/* Compose Section */}
+          <div
+            className="rounded-xl p-4 mb-4"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <h3 className="text-white text-sm font-medium mb-3">
+              Compose RCS Message
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+              <div>
+                <label
+                  htmlFor="rcs-send-to"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Send To
+                </label>
+                <select
+                  id="rcs-send-to"
+                  value={rcsSendTo}
+                  onChange={(e) => setRcsSendTo(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500"
+                  data-ocid="communicate.rcs.select"
+                >
+                  <option>All Parents</option>
+                  <option>All Students</option>
+                  <option>All Teachers</option>
+                  <option>All Staff</option>
+                  <option>Individual (specify below)</option>
+                </select>
+              </div>
+              <div>
+                <label
+                  htmlFor="rcs-template"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Message Template
+                </label>
+                <select
+                  id="rcs-template"
+                  value={rcsTemplate}
+                  onChange={(e) => {
+                    setRcsTemplate(e.target.value);
+                    setRcsMessage(RCS_TEMPLATES[e.target.value] || "");
+                  }}
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-2 py-1.5 text-white text-xs outline-none focus:border-blue-500"
+                  data-ocid="communicate.rcs.select"
+                >
+                  {Object.keys(RCS_TEMPLATES).map((t) => (
+                    <option key={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="mb-3">
+              <label
+                htmlFor="rcs-message-text"
+                className="text-gray-400 text-xs block mb-1"
+              >
+                Message Text
+              </label>
+              <textarea
+                id="rcs-message-text"
+                value={rcsMessage}
+                onChange={(e) => setRcsMessage(e.target.value)}
+                rows={4}
+                placeholder="Type or edit your RCS message here..."
+                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-xs outline-none focus:border-blue-500 resize-none"
+                data-ocid="communicate.rcs.textarea"
+              />
+              <p className="text-gray-600 text-[10px] mt-1">
+                {rcsMessage.length} characters &bull; Use {"{name}"},{" "}
+                {"{month}"}, {"{date}"} as placeholders
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSendRCS}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs font-medium transition"
+              data-ocid="communicate.rcs.button"
+            >
+              <Send size={13} /> Send RCS Message
+            </button>
+          </div>
+
+          {/* Sent Messages Log */}
+          <div
+            className="rounded-xl overflow-hidden"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <div className="p-3 border-b border-gray-700 flex items-center justify-between">
+              <span className="text-white text-sm font-medium">
+                Sent Messages Log
+              </span>
+              <div className="flex items-center bg-gray-800 rounded px-2 py-1">
+                <Search size={11} className="text-gray-400 mr-1" />
+                <input
+                  value={rcsSearch}
+                  onChange={(e) => setRcsSearch(e.target.value)}
+                  placeholder="Search..."
+                  className="bg-transparent text-gray-300 text-xs outline-none w-24"
+                  data-ocid="communicate.rcs.search_input"
+                />
+              </div>
+            </div>
+            {filteredRcsSent.length === 0 ? (
+              <div
+                className="text-center py-8 text-gray-500 text-sm"
+                data-ocid="communicate.rcs.empty_state"
+              >
+                No RCS messages sent yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr
+                      style={{
+                        background: "#111827",
+                        borderBottom: "1px solid #1f2937",
+                      }}
+                    >
+                      <th className="px-3 py-2 text-left text-gray-400 font-medium">
+                        Recipient
+                      </th>
+                      <th className="px-3 py-2 text-left text-gray-400 font-medium">
+                        Message Preview
+                      </th>
+                      <th className="px-3 py-2 text-left text-gray-400 font-medium">
+                        Date/Time
+                      </th>
+                      <th className="px-3 py-2 text-left text-gray-400 font-medium">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRcsSent.map((m, i) => (
+                      <tr
+                        key={m.id}
+                        style={{
+                          background: i % 2 === 0 ? "#0d111c" : "#111827",
+                          borderBottom: "1px solid #1f2937",
+                        }}
+                        data-ocid={`communicate.rcs.item.${i + 1}`}
+                      >
+                        <td className="px-3 py-2 text-white font-medium">
+                          {m.recipient}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400 max-w-[200px] truncate">
+                          {m.preview}
+                        </td>
+                        <td className="px-3 py-2 text-gray-400">
+                          {m.dateTime}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded border ${
+                              m.status === "Delivered"
+                                ? "bg-green-900/50 text-green-400 border-green-700"
+                                : m.status === "Pending"
+                                  ? "bg-yellow-900/50 text-yellow-400 border-yellow-700"
+                                  : "bg-red-900/50 text-red-400 border-red-700"
+                            }`}
+                          >
+                            {m.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 

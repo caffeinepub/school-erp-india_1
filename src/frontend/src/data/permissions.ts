@@ -511,6 +511,36 @@ function buildStudentPerms(): RolePermissions {
   return result;
 }
 
+function buildDriverPerms(): RolePermissions {
+  const viewOnly: import("../types/auth").Permission = {
+    view: true,
+    add: false,
+    edit: false,
+    delete: false,
+  };
+  const noAccess: import("../types/auth").Permission = {
+    view: false,
+    add: false,
+    edit: false,
+    delete: false,
+  };
+  const result: RolePermissions = {};
+  const driverModules = [
+    "Transport",
+    "Student Attendance",
+    "Dashboard and Widgets",
+  ];
+  for (const { module, features } of permissionModules) {
+    result[module] = {};
+    for (const feature of features) {
+      result[module][feature] = driverModules.includes(module)
+        ? viewOnly
+        : noAccess;
+    }
+  }
+  return result;
+}
+
 export const defaultPermissions: Record<Role, RolePermissions> = {
   super_admin: allModulesTrue(),
   admin: allModulesTrue(),
@@ -519,6 +549,7 @@ export const defaultPermissions: Record<Role, RolePermissions> = {
   teacher: buildTeacherPerms(),
   parent: buildParentPerms(),
   student: buildStudentPerms(),
+  driver: buildDriverPerms(),
 };
 
 // Silence unused import warning

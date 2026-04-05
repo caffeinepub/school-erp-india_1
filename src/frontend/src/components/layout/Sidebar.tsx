@@ -22,6 +22,7 @@ import {
   MessageSquare,
   Monitor,
   Package,
+  QrCode,
   Settings,
   TrendingDown,
   TrendingUp,
@@ -41,6 +42,7 @@ interface NavModule {
   label: string;
   path: string;
   permissionModule?: string;
+  allowedRoles?: string[];
   children?: NavChild[];
 }
 
@@ -111,6 +113,12 @@ const navModules: NavModule[] = [
       { label: "Approve Leave", path: "/attendance" },
       { label: "Attendance By Date", path: "/attendance" },
     ],
+  },
+  {
+    icon: <QrCode size={15} className="text-cyan-400" />,
+    label: "QR Scanner",
+    path: "/qr-scanner",
+    allowedRoles: ["super_admin", "admin", "teacher", "driver"],
   },
   {
     icon: <Home size={15} />,
@@ -374,9 +382,13 @@ export function Sidebar({ collapsed, currentPath, navigate }: SidebarProps) {
   if (collapsed) return null;
 
   const userRole = user?.role ?? "student";
-  const rolePerms = permissions[userRole] ?? {};
+  const rolePerms = permissions[userRole as keyof typeof permissions] ?? {};
 
   const visibleModules = navModules.filter((mod) => {
+    // Role-explicit allow list
+    if (mod.allowedRoles) {
+      return mod.allowedRoles.includes(userRole);
+    }
     if (!mod.permissionModule) return true;
     const modPerms = rolePerms[mod.permissionModule];
     if (!modPerms) return false;
@@ -444,6 +456,18 @@ export function Sidebar({ collapsed, currentPath, navigate }: SidebarProps) {
                     }}
                   >
                     NEW
+                  </span>
+                )}
+                {mod.label === "QR Scanner" && (
+                  <span
+                    className="text-[9px] px-1 py-0 rounded font-bold"
+                    style={{
+                      background: "#0891b220",
+                      color: "#22d3ee",
+                      border: "1px solid #0891b240",
+                    }}
+                  >
+                    SCAN
                   </span>
                 )}
                 {mod.children &&

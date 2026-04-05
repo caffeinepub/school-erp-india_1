@@ -1,60 +1,79 @@
 # SHUBH SCHOOL ERP
 
 ## Current State
-- Header shows "School ERP" as the app name, session switcher dropdown exists but labeled generically
-- Configure Fees Plan has a "Choose Category" panel (non-functional, cluttering UI)
-- Student details modal (StudentDetailModal in Students.tsx) shows basic info but NO fees details, transport details, or discount sections
-- Dues Fees tab shows month-wise dues for a single student only (no class-level wizard, no print/export/reminder options)
-- GROUPS constant is hardcoded array in Fees.tsx with no CRUD management UI
-- ACCOUNTS constant is hardcoded array in Fees.tsx with no CRUD management UI
-- Months order in school year not explicitly enforced to start April and end March
-- No student photo shown when a student is selected anywhere (Collect Fees, Dues Fees, etc.)
-- Discount in student details not integrated with fees master (not calculated per month)
+
+Full-featured School Management ERP for Indian schools. Modules built: Dashboard, Students, Fees (Collect/Register/Dues/Master/Groups/Accounts), Attendance (RFID/QR/ESSL), Examinations (Timetable Maker with auto-generate, drag-drop), Teacher Timetable (Wizard, per-section, combined view), Certificates (Student ID/Staff ID/TC/Admit Card), HR/Payroll, Transport (Routes/Vehicles/Pickup Points), Communication/WhatsApp, Academics, Alumni, Inventory, Expenses, Homework, Reports, Promote Students, Settings (School Profile). Session management with infinite sessions and switching. Role-based access control. 20 demo students seeded.
 
 ## Requested Changes (Diff)
 
 ### Add
-1. **App name change**: "School ERP" → "SHUBH SCHOOL ERP" everywhere (Header text, title, sidebar brand)
-2. **Session label in header top-left**: Show "Current Session: 2025-26" (or active session from settings) as a visible label integrated with the session switcher — clicking shows the dropdown
-3. **Student photo verification**: When any student is selected (Collect Fees search, Dues Fees search, Student Details modal), show the student's photo (from their profile, fallback to initials avatar) prominently so staff can verify identity
-4. **Student Details — Fees/Transport/Discount tabs**: In the StudentDetailModal, add tabs:
-   - **Fees Details**: Show fees from fees master for the student's class, with monthly breakdown (April→March). Show each fee head, monthly amount, paid status, due amount, old due fees (carried forward from previous session with month-wise breakdown), and computed Net Payable Amount = (fees master amount × months) - discounts + old dues
-   - **Transport Details**: Show transport route/vehicle/pickup point assigned to the student from Transport module data
-   - **Discounts**: Show assigned discounts (from fees master discount records for this student). Discount calculated per month: if 100/month discount → 100 deducted per month, not a lump sum. Net payable amount updates accordingly.
-   - **Old Fees**: Show previous session dues (month-wise, which months are unpaid) pulled from erp_session_archive data, with total old balance added to net payable
-5. **Dues Fees wizard**: Replace the single-student search with a 2-step wizard:
-   - **Step 1 — Months**: Checkbox grid (April, May, June, July, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar) for user to select which months to check dues for
-   - **Step 2 — Classes**: Checkbox grid (Nursery, LKG, UKG, Class 1–12) for user to select which classes to include
-   - After selecting months + classes, show a dues report table: Student Name | Adm No | Class | Section | selected-month columns with due amounts | Total Due
-   - **Actions toolbar**: Print button (print dues report with student names and months), Excel Export (download as CSV/xlsx), Reminder Letter (print individual page per student with their dues — bulk print for multiple students), WhatsApp Reminder (simulate sending reminder to all parents whose fees are due, show a confirmation summary)
-6. **Group Name sub-module** under Fees: A "Groups" management panel where users can Add, Edit, Delete group names. These groups feed the GROUPS dropdown in Fees Master. Stored in localStorage key `erp_fee_groups`. Default groups: General, Transport, Sports, Lab.
-7. **Account sub-module** under Fees: An "Accounts" management panel where users can Add, Edit, Delete account names. Show account-wise received fees summary (total fees received per account name from erp_fee_payments). Stored in localStorage key `erp_fee_accounts`. Default accounts: Admission Fees, Tuition Fees, Computer, Vikas Shulk, Examination, TDS, old year.
-8. **Months order**: Ensure all month arrays/selectors throughout Fees and Dues start with April and end with March (Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec, Jan, Feb, Mar)
+
+1. **Transport Details in Student Profile** -- Auto-populate 3 fields from Transport module: Bus No., Route, Pickup Point (read from student's transport assignment)
+
+2. **Auto-Created Credentials**
+   - Student login: username = Adm. No., password = DOB (ddmmyyyy format)
+   - Teacher login: username = Mobile No., password = DOB (ddmmyyyy format)
+   - Parent login: username = Mobile No., password = Mobile No. (parent with multiple children sees all their wards)
+   - Login Credentials tab in Student/Teacher profile (Super Admin can view & reset)
+   - User Management screen under Settings: lists all users (students, teachers, parents) with reset password capability
+
+3. **Password Change**
+   - Any user can change their own password after login (Change Password option in header/profile)
+   - Super Admin can reset any user's password from User Management
+
+4. **Online Fees Module**
+   - Settings > Online Payment: Super Admin toggles GPay / Razorpay / PayU on/off
+   - Simulated demo flow (no real money) -- shows payment UI, on confirm marks as paid
+   - Auto-updates Fee Register, generates receipt, marks month as paid
+   - Students/Parents can pay from their login dashboard
+
+5. **Google RCS Notification Panel**
+   - New tab/section in Communication: "RCS Messages"
+   - Simulated sending (like WhatsApp module)
+   - Send to: Parents, Students, Teachers (group or individual)
+   - Message templates (Fee due, Absent, General, etc.)
+
+6. **Auto-Send Notification Scheduler**
+   - Settings > Notification Scheduler
+   - Checkbox wizard: select which events to auto-trigger
+   - Events: Fee due reminder (X days before), Absent alert (same day), Exam timetable published, Result published, Birthday wish, General notice, Homework deadline reminder
+   - Per event: configure timing (days before/after), recipient group (Parents/Students/Teachers), channel (WhatsApp/RCS/Both)
+   - Toggle each rule on/off
+
+7. **QR Attendance (Mobile Scanner)**
+   - New "QR Scanner" page accessible on mobile
+   - Opens camera, scans student admit card QR code
+   - Marks student present with timestamp (date/time, scanned by, device)
+   - Available to roles: Super Admin, Admin, Teacher, Driver
+   - Driver is a new login role (added to role list alongside Teacher/Admin etc.)
+   - Driver role: can only access QR Scanner and view their assigned route's students
 
 ### Modify
-1. **Configure Fees Plan**: Remove the entire "Choose Category" panel/section (the right-side grid with CATEGORIES checkboxes). Keep only Classes selection. Remove category from the saved plan data display.
-2. **Header brand**: Change "School ERP" text to "SHUBH SCHOOL ERP"
-3. **Session switcher**: Display "Current Session: [session]" as label text next to the Archive icon (not just the session value) so it's clear this is the current session indicator
-4. **GROUPS and ACCOUNTS**: Change from hardcoded constants to dynamic — read from localStorage `erp_fee_groups` and `erp_fee_accounts` so the new sub-modules feed these dropdowns live
-5. **Dues Fees tab**: Replace existing single-student flow with the new wizard (see Add #5 above)
+
+- **Student Profile** (double-click detail modal): Add Transport tab showing Bus No., Route, Pickup Point auto-filled from transport assignment
+- **Login page**: Add parent login flow; auto-generate credentials shown during first login
+- **HR Module**: Add Driver as a staff designation/role option
+- **Sidebar**: Add QR Scanner link (visible to Admin, Teacher, Driver roles)
+- **Settings**: Add "User Management", "Online Payment", "Notification Scheduler" tabs
+- **Non-working submodules**: Identify and remove any broken/stub submodule tabs that do not function
 
 ### Remove
-1. "Choose Category" panel from Configure Fees Plan tab
-2. Categories column from the fee plans table display
+
+- Any submodule tab/section that is completely non-functional (stub only, no working UI) -- replace with a clean "Coming Soon" or remove entirely
 
 ## Implementation Plan
 
-1. **Header.tsx**: Change "School ERP" → "SHUBH SCHOOL ERP"; update session label to show "Current Session: X"
-2. **Fees.tsx**:
-   a. Change GROUPS and ACCOUNTS to read from localStorage dynamically (helper functions)
-   b. Remove Choose Category section from Configure Fees Plan tab
-   c. Remove Category column from fee plans table
-   d. Rewrite DuesFeesTab to wizard-based (months checkboxes + class checkboxes + report table + Print/Excel/Reminder Letter/WhatsApp Reminder actions)
-   e. Add GroupsSubModule component — CRUD panel for group names, saves to erp_fee_groups
-   f. Add AccountsSubModule component — CRUD panel for account names + account-wise fees summary, saves to erp_fee_accounts
-   g. Add new tabs in Fees page navigation for "Groups" and "Accounts"
-   h. Ensure all month arrays start April and end March
-3. **Students.tsx**:
-   a. StudentDetailModal: Add Fees Details, Transport Details, Discounts, Old Fees tabs with integrated data
-   b. Show student photo (from student.photo field or initials avatar) in all student selection contexts
-4. **Collect Fees (inside Fees.tsx)**: When student is selected from dynamic search dropdown, show student photo/avatar in the student info panel for identity verification
+1. Add Transport tab to student detail modal -- read from localStorage transport assignments, match by student Adm. No.
+2. Build credential generation logic: on app init, auto-generate credentials for all students/teachers/parents if not already set; store in localStorage under `shubh_credentials`
+3. Add Login Credentials tab to student and teacher profile modals (Super Admin only)
+4. Build User Management page under Settings with search, list all users, reset password modal
+5. Add Change Password option in header dropdown for logged-in user
+6. Build Online Payment settings toggle (GPay/Razorpay/PayU) in Settings
+7. Build simulated online payment flow: student/parent selects months, clicks Pay Online, shows UPI/card UI, on confirm auto-creates receipt and updates Fee Register
+8. Build RCS Messages tab in Communication module (simulated, templates, send to groups)
+9. Build Notification Scheduler in Settings: checkbox wizard with all 7 event types, timing config, channel config, on/off toggle per rule
+10. Build QR Scanner page: camera-based QR scan using browser camera API, decode student data from QR, mark attendance, show confirmation
+11. Add Driver role to role list; Driver login only sees QR Scanner and their route
+12. Audit all existing submodules and remove/replace non-functional stubs
+13. Wire transport assignment data to student profile transport tab
+14. Ensure parent login shows all children's fee/attendance summary

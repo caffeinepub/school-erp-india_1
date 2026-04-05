@@ -1,7 +1,11 @@
 import { Toaster } from "@/components/ui/sonner";
 import { useEffect, useState } from "react";
 import { Layout } from "./components/layout/Layout";
-import { AuthProvider, useAuth } from "./context/AuthContext";
+import {
+  AuthProvider,
+  generateCredentialsFromData,
+  useAuth,
+} from "./context/AuthContext";
 import { SchoolProvider } from "./context/SchoolContext";
 import { Academics } from "./pages/Academics";
 import { Alumni } from "./pages/Alumni";
@@ -9,6 +13,7 @@ import { Attendance } from "./pages/Attendance";
 import { Certificate } from "./pages/Certificate";
 import { Communicate } from "./pages/Communicate";
 import { Dashboard } from "./pages/Dashboard";
+import { DriverDashboard } from "./pages/DriverDashboard";
 import { Examinations } from "./pages/Examinations";
 import { Expenses } from "./pages/Expenses";
 import { Fees } from "./pages/Fees";
@@ -16,7 +21,9 @@ import { HumanResource } from "./pages/HR";
 import { Homework } from "./pages/Homework";
 import { Inventory } from "./pages/Inventory";
 import { LoginPage } from "./pages/LoginPage";
+import { ParentDashboard } from "./pages/ParentDashboard";
 import { PromoteStudents } from "./pages/PromoteStudents";
+import { QRScanner } from "./pages/QRScanner";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Students } from "./pages/Students";
@@ -36,9 +43,14 @@ function AppInner() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Seed demo data once on mount
+  // Seed demo data and generate credentials on mount
   useEffect(() => {
     seedDemoDataIfEmpty();
+    // Small delay to ensure demo data is seeded first
+    const timer = setTimeout(() => {
+      generateCredentialsFromData();
+    }, 200);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -68,6 +80,59 @@ function AppInner() {
     window.location.hash = to;
   };
 
+  // Driver-only view
+  if (user.role === "driver") {
+    if (path === "/qr-scanner")
+      return (
+        <Layout
+          collapsed={sidebarCollapsed}
+          onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+          currentPath={path}
+          navigate={navigate}
+          isOnline={isOnline}
+          isSyncing={isSyncing}
+        >
+          <QRScanner />
+        </Layout>
+      );
+    return (
+      <Layout
+        collapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        currentPath={path}
+        navigate={navigate}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+      >
+        <DriverDashboard navigate={navigate} />
+      </Layout>
+    );
+  }
+
+  // Parent-only view
+  if (user.role === "parent") {
+    return (
+      <Layout
+        collapsed={sidebarCollapsed}
+        onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
+        currentPath={path}
+        navigate={navigate}
+        isOnline={isOnline}
+        isSyncing={isSyncing}
+      >
+        {path === "/fees" ? (
+          <Fees />
+        ) : path === "/attendance" ? (
+          <Attendance />
+        ) : path === "/communicate" ? (
+          <Communicate />
+        ) : (
+          <ParentDashboard navigate={navigate} />
+        )}
+      </Layout>
+    );
+  }
+
   const renderPage = () => {
     if (path === "/" || path === "") return <Dashboard navigate={navigate} />;
     if (path === "/students") return <Students />;
@@ -88,6 +153,7 @@ function AppInner() {
     if (path === "/alumni") return <Alumni />;
     if (path === "/teacher-timetable") return <TeacherTimetable />;
     if (path === "/promote") return <PromoteStudents />;
+    if (path === "/qr-scanner") return <QRScanner />;
     return <Dashboard navigate={navigate} />;
   };
 

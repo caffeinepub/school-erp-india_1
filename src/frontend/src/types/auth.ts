@@ -5,7 +5,8 @@ export type Role =
   | "librarian"
   | "teacher"
   | "parent"
-  | "student";
+  | "student"
+  | "driver";
 
 export interface Permission {
   view: boolean;

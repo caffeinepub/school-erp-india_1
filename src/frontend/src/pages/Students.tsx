@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { getAllCredentials, useAuth } from "../context/AuthContext";
 import { StudentAdmissionForm } from "./StudentAdmissionForm";
 
 interface Student {
@@ -1310,8 +1311,9 @@ function StudentDetailModal({
   onEdit: () => void;
   onDiscontinue: () => void;
 }) {
+  const { user: currentUser } = useAuth();
   const [detailTab, setDetailTab] = useState<
-    "info" | "fees" | "transport" | "discounts" | "oldfees"
+    "info" | "fees" | "transport" | "discounts" | "oldfees" | "credentials"
   >("info");
 
   const SCHOOL_MONTHS = [
@@ -1513,12 +1515,17 @@ function StudentDetailModal({
     oldFeesData.reduce((s, r) => s + r.amount, 0) + (student.oldBalance || 0);
   const netPayable = totalFees - totalDiscount + totalOldBalance - paidFees;
 
+  // Use auth context to check role - need to add useAuth import check
+  // We'll add credentials tab conditionally via the existing userRole variable which comes from useAuth
   const detailTabs = [
     { id: "info" as const, label: "Info" },
     { id: "fees" as const, label: "💰 Fees Details" },
     { id: "transport" as const, label: "🚌 Transport" },
     { id: "discounts" as const, label: "🏷 Discounts" },
     { id: "oldfees" as const, label: "📋 Old Fees" },
+    ...(currentUser?.role === "super_admin"
+      ? [{ id: "credentials" as const, label: "🔑 Credentials" }]
+      : []),
   ];
 
   return (
@@ -2169,6 +2176,12 @@ function StudentDetailModal({
               )}
             </div>
           )}
+
+          {/* CREDENTIALS TAB */}
+          {detailTab === "credentials" &&
+            currentUser?.role === "super_admin" && (
+              <CredentialsTab student={student} />
+            )}
         </div>
       </div>
     </div>
@@ -3726,6 +3739,179 @@ function SortControl({
         <ArrowRight size={10} className="rotate-180" />
         Z→A
       </label>
+    </div>
+  );
+}
+
+// CREDENTIALS TAB COMPONENT
+interface CredentialsTabProps {
+  student: Student;
+}
+
+function CredentialsTab({ student }: CredentialsTabProps) {
+  const { resetPassword } = useAuth();
+  const [showPwd, setShowPwd] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [newPwd, setNewPwd] = useState("");
+  const [confirmPwd, setConfirmPwd] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const creds = getAllCredentials().find((c) => c.userId === student.admNo);
+  const username = student.admNo;
+  const password = creds?.password || "Not set";
+
+  const handleReset = () => {
+    setError("");
+    if (!newPwd || !confirmPwd) {
+      setError("Both fields required.");
+      return;
+    }
+    if (newPwd !== confirmPwd) {
+      setError("Passwords do not match.");
+      return;
+    }
+    if (newPwd.length < 4) {
+      setError("Minimum 4 characters.");
+      return;
+    }
+    const ok = resetPassword(username, newPwd);
+    if (ok) {
+      setSuccess(true);
+      setTimeout(() => {
+        setResetOpen(false);
+        setSuccess(false);
+        setNewPwd("");
+        setConfirmPwd("");
+      }, 1500);
+    } else {
+      setError("Could not reset password.");
+    }
+  };
+
+  return (
+    <div>
+      <h3 className="text-white text-sm font-semibold mb-3">
+        🔑 Login Credentials
+      </h3>
+      <div
+        className="rounded-lg p-4 space-y-3"
+        style={{ background: "#111827", border: "1px solid #1f2937" }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400 text-xs">Username (Adm. No.)</span>
+          <span className="font-mono text-blue-300 text-sm">{username}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-gray-400 text-xs">Password</span>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm text-white">
+              {showPwd ? password : "•".repeat(Math.min(password.length, 8))}
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowPwd((v) => !v)}
+              className="text-gray-400 hover:text-white text-xs"
+            >
+              {showPwd ? "Hide" : "Show"}
+            </button>
+          </div>
+        </div>
+        <div className="pt-2 border-t border-gray-700">
+          <button
+            type="button"
+            onClick={() => setResetOpen(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded"
+            data-ocid="student.credentials.button"
+          >
+            Reset Password
+          </button>
+        </div>
+      </div>
+      {resetOpen && (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.7)" }}
+        >
+          <div
+            className="rounded-xl p-6 w-full max-w-sm shadow-2xl"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <h3 className="text-white text-base font-semibold mb-1">
+              Reset Student Password
+            </h3>
+            <p className="text-gray-400 text-xs mb-4">
+              Student: <span className="text-white">{student.name}</span>
+            </p>
+            {success ? (
+              <div className="text-center py-6">
+                <div className="text-4xl mb-2">✅</div>
+                <p className="text-green-400 font-semibold">Password reset!</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label
+                    htmlFor="cred-new-pwd"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    New Password
+                  </label>
+                  <input
+                    id="cred-new-pwd"
+                    type="password"
+                    value={newPwd}
+                    onChange={(e) => setNewPwd(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                    data-ocid="student.credentials.input"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="cred-conf-pwd"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    Confirm Password
+                  </label>
+                  <input
+                    id="cred-conf-pwd"
+                    type="password"
+                    value={confirmPwd}
+                    onChange={(e) => setConfirmPwd(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleReset()}
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-blue-500"
+                    data-ocid="student.credentials.input"
+                  />
+                </div>
+                {error && <p className="text-red-400 text-xs">{error}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleReset}
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded px-4 py-2 text-sm font-medium transition"
+                    data-ocid="student.credentials.confirm_button"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetOpen(false);
+                      setError("");
+                      setNewPwd("");
+                      setConfirmPwd("");
+                    }}
+                    className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded transition"
+                    data-ocid="student.credentials.cancel_button"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
