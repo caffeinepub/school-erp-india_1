@@ -5,6 +5,7 @@ import {
   Bell,
   Building2,
   Calendar,
+  CheckCheck,
   CheckSquare,
   ChevronDown,
   Eye,
@@ -14,11 +15,13 @@ import {
   Menu,
   RefreshCw,
   Search,
+  Trash2,
   User,
   Wifi,
   WifiOff,
+  X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useSchool } from "../../context/SchoolContext";
 
@@ -43,6 +46,241 @@ const ROLE_LABELS: Record<string, string> = {
   student: "Student",
   driver: "Driver",
 };
+
+// ─── ERP Notification Types ──────────────────────────────────────────────────
+export interface ERPNotification {
+  id: string;
+  type:
+    | "fee"
+    | "attendance"
+    | "student"
+    | "exam"
+    | "homework"
+    | "general"
+    | "checkin";
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  icon?: string;
+}
+
+export function addERPNotification(
+  notif: Omit<ERPNotification, "id" | "timestamp" | "read">,
+) {
+  try {
+    const notifications: ERPNotification[] = JSON.parse(
+      localStorage.getItem("erp_notifications") || "[]",
+    );
+    const newNotif: ERPNotification = {
+      ...notif,
+      id: Date.now().toString(),
+      timestamp: new Date().toISOString(),
+      read: false,
+    };
+    const updated = [newNotif, ...notifications].slice(0, 100);
+    localStorage.setItem("erp_notifications", JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent("erp_notification_added"));
+  } catch {
+    // ignore
+  }
+}
+
+function getRelativeTime(isoString: string): string {
+  const diff = Date.now() - new Date(isoString).getTime();
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 10) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hr ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days > 1 ? "s" : ""} ago`;
+}
+
+const NOTIF_TYPE_COLORS: Record<string, string> = {
+  fee: "bg-green-500/10 text-green-400",
+  attendance: "bg-blue-500/10 text-blue-400",
+  student: "bg-purple-500/10 text-purple-400",
+  exam: "bg-yellow-500/10 text-yellow-400",
+  homework: "bg-orange-500/10 text-orange-400",
+  general: "bg-gray-500/10 text-gray-400",
+  checkin: "bg-cyan-500/10 text-cyan-400",
+};
+
+// ─── Notification Bell Component ─────────────────────────────────────────────
+function NotificationBell() {
+  const [notifications, setNotifications] = useState<ERPNotification[]>([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const loadNotifications = useCallback(() => {
+    try {
+      const data: ERPNotification[] = JSON.parse(
+        localStorage.getItem("erp_notifications") || "[]",
+      );
+      setNotifications(data);
+    } catch {
+      setNotifications([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadNotifications();
+    const handler = () => loadNotifications();
+    window.addEventListener("erp_notification_added", handler);
+    return () => window.removeEventListener("erp_notification_added", handler);
+  }, [loadNotifications]);
+
+  useEffect(() => {
+    function handleOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
+  const markAllRead = () => {
+    const updated = notifications.map((n) => ({ ...n, read: true }));
+    localStorage.setItem("erp_notifications", JSON.stringify(updated));
+    setNotifications(updated);
+  };
+
+  const clearAll = () => {
+    localStorage.setItem("erp_notifications", JSON.stringify([]));
+    setNotifications([]);
+  };
+
+  const markRead = (id: string) => {
+    const updated = notifications.map((n) =>
+      n.id === id ? { ...n, read: true } : n,
+    );
+    localStorage.setItem("erp_notifications", JSON.stringify(updated));
+    setNotifications(updated);
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-gray-400 hover:text-white relative p-1"
+        data-ocid="header.notification.button"
+      >
+        <Bell size={16} />
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full min-w-[14px] h-3.5 flex items-center justify-center px-0.5 font-bold">
+            {unreadCount > 99 ? "99+" : unreadCount}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full right-0 mt-2 z-50 w-80 rounded-xl border border-gray-700 shadow-2xl overflow-hidden"
+          style={{ background: "#1a1f2e" }}
+          data-ocid="header.notification.popover"
+        >
+          {/* Header */}
+          <div
+            className="flex items-center justify-between px-3 py-2 border-b border-gray-700"
+            style={{ background: "#141927" }}
+          >
+            <span className="text-white text-xs font-semibold flex items-center gap-1.5">
+              <Bell size={12} className="text-yellow-400" />
+              Notifications
+              {unreadCount > 0 && (
+                <span className="bg-red-500 text-white text-[9px] rounded-full px-1.5 py-0.5 font-bold">
+                  {unreadCount}
+                </span>
+              )}
+            </span>
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="text-[10px] text-blue-400 hover:text-blue-300 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-blue-900/20 transition"
+                  data-ocid="header.notification.mark_all_read"
+                >
+                  <CheckCheck size={10} /> Mark all read
+                </button>
+              )}
+              {notifications.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  className="text-[10px] text-red-400 hover:text-red-300 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-red-900/20 transition"
+                  data-ocid="header.notification.clear_button"
+                >
+                  <Trash2 size={10} /> Clear
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Notification list */}
+          <div className="overflow-y-auto" style={{ maxHeight: 360 }}>
+            {notifications.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center py-10 text-gray-500"
+                data-ocid="header.notification.empty_state"
+              >
+                <Bell size={28} className="mb-2 opacity-30" />
+                <p className="text-xs">No new notifications</p>
+              </div>
+            ) : (
+              notifications.map((n, idx) => (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => markRead(n.id)}
+                  className={`w-full flex items-start gap-2.5 px-3 py-2.5 cursor-pointer hover:bg-gray-800/60 transition border-b border-gray-700/50 text-left ${
+                    !n.read
+                      ? "border-l-2 border-l-blue-500"
+                      : "border-l-2 border-l-transparent"
+                  }`}
+                  data-ocid={`header.notification.item.${idx + 1}`}
+                >
+                  <div
+                    className={`text-base rounded-lg w-8 h-8 flex items-center justify-center flex-shrink-0 ${
+                      NOTIF_TYPE_COLORS[n.type] || NOTIF_TYPE_COLORS.general
+                    }`}
+                  >
+                    {n.icon || "🔔"}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-xs font-medium leading-tight ${
+                        n.read ? "text-gray-400" : "text-white"
+                      }`}
+                    >
+                      {n.title}
+                    </p>
+                    <p className="text-[10px] text-gray-500 leading-snug mt-0.5 truncate">
+                      {n.message}
+                    </p>
+                    <p className="text-[9px] text-gray-600 mt-1">
+                      {getRelativeTime(n.timestamp)}
+                    </p>
+                  </div>
+                  {!n.read && (
+                    <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1.5" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -323,15 +561,9 @@ export function Header({ onToggleSidebar, isOnline, isSyncing }: HeaderProps) {
           <button type="button" className="text-gray-400 hover:text-white">
             <CheckSquare size={16} />
           </button>
-          <button
-            type="button"
-            className="text-gray-400 hover:text-white relative"
-          >
-            <Bell size={16} />
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] rounded-full w-3.5 h-3.5 flex items-center justify-center">
-              0
-            </span>
-          </button>
+
+          {/* Live Notification Bell */}
+          <NotificationBell />
 
           {/* User Profile Dropdown */}
           {user && (

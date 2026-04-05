@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { addERPNotification } from "../components/layout/Header";
 import { getAllCredentials, useAuth } from "../context/AuthContext";
 import { StudentAdmissionForm } from "./StudentAdmissionForm";
 
@@ -3012,6 +3013,12 @@ export function Students() {
       };
       setStudents((prev) => [...prev, newStudent]);
       toast.success("Student admitted successfully!");
+      addERPNotification({
+        type: "student",
+        icon: "👤",
+        title: "New Student Added",
+        message: `${newStudent.name} admitted to ${newStudent.className} - ${newStudent.section}`,
+      });
     }
     setEditStudent(null);
     setShowAdmissionForm(false);

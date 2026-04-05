@@ -4,9 +4,9 @@ import Map "mo:core/Map";
 import Text "mo:core/Text";
 import Runtime "mo:core/Runtime";
 import Iter "mo:core/Iter";
-import Migration "migration";
 
-(with migration = Migration.run)
+
+
 actor {
   type NotificationChannel = {
     email : Bool;

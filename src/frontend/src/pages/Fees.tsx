@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { addERPNotification } from "../components/layout/Header";
 
 // ─── Number to Words Helper ──────────────────────────────────────────────────
 function numberToWords(num: number): string {
@@ -2086,6 +2087,12 @@ function CollectFeesTab() {
       "erp_fee_payments",
       JSON.stringify([...existing, record]),
     );
+    addERPNotification({
+      type: "fee",
+      icon: "💰",
+      title: "Fee Receipt Saved",
+      message: `₹${rcptAmt.toLocaleString("en-IN")} received from ${student.name} • Receipt #${receiptNo}`,
+    });
     setShowSaveDialog(true);
   };
 

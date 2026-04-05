@@ -32,6 +32,23 @@ import { Transport } from "./pages/Transport";
 import { WhatsApp } from "./pages/WhatsApp";
 import { seedDemoDataIfEmpty } from "./utils/demoData";
 
+// Increment this version to wipe all old localStorage data on next load
+const APP_DATA_VERSION = "v29-clean";
+
+function clearOldData() {
+  const stored = localStorage.getItem("erp_data_version");
+  if (stored !== APP_DATA_VERSION) {
+    // Clear all ERP data keys
+    const erpKeys = Object.keys(localStorage).filter((k) =>
+      k.startsWith("erp_"),
+    );
+    for (const key of erpKeys) {
+      localStorage.removeItem(key);
+    }
+    localStorage.setItem("erp_data_version", APP_DATA_VERSION);
+  }
+}
+
 function getPath() {
   return window.location.hash.replace("#", "") || "/";
 }
@@ -43,10 +60,10 @@ function AppInner() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Seed demo data and generate credentials on mount
+  // Clear old demo data, then initialize clean defaults
   useEffect(() => {
+    clearOldData();
     seedDemoDataIfEmpty();
-    // Small delay to ensure demo data is seeded first
     const timer = setTimeout(() => {
       generateCredentialsFromData();
     }, 200);

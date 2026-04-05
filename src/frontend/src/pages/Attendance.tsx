@@ -1,6 +1,7 @@
-import { Download, Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Cpu, Download, Monitor, Search, Users } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { addERPNotification } from "../components/layout/Header";
 
 type AttStatus = "Present" | "Absent" | "Late";
 
@@ -26,11 +27,27 @@ interface BiometricEntry {
   name: string;
   type: "Student" | "Staff";
   className?: string;
+  section?: string;
   designation?: string;
+  fatherName?: string;
+  photo?: string;
   date: string;
   inTime: string;
   outTime: string;
   deviceType: "RFID" | "ESSL Biometric" | "Manual";
+}
+
+interface LastCheckin {
+  personId: string;
+  name: string;
+  type: "Student" | "Staff";
+  className?: string;
+  section?: string;
+  designation?: string;
+  fatherName?: string;
+  photo?: string;
+  inTime: string;
+  date: string;
 }
 
 function calcDuration(inT: string, outT: string): string {
@@ -62,7 +79,563 @@ function saveBioLog(log: BiometricEntry[]) {
   localStorage.setItem("erp_biometric_log", JSON.stringify(log));
 }
 
-// ─── RFID/Biometric Tab ───────────────────────────────────────────────────────
+function broadcastCheckin(entry: LastCheckin) {
+  localStorage.setItem("erp_last_checkin", JSON.stringify(entry));
+  window.dispatchEvent(new CustomEvent("erp_last_checkin_updated"));
+}
+
+// ─── Welcome Display Tab ───────────────────────────────────────────────────────────────
+function WelcomeDisplayTab() {
+  const [clock, setClock] = useState("");
+  const [dateStr, setDateStr] = useState("");
+  const [checkin, setCheckin] = useState<LastCheckin | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [recentCheckins, setRecentCheckins] = useState<LastCheckin[]>([]);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const schoolName = (() => {
+    try {
+      return (
+        JSON.parse(localStorage.getItem("erp_settings") || "{}").schoolName ||
+        "SHUBH SCHOOL ERP"
+      );
+    } catch {
+      return "SHUBH SCHOOL ERP";
+    }
+  })();
+
+  // Live clock
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const h = String(now.getHours()).padStart(2, "0");
+      const m = String(now.getMinutes()).padStart(2, "0");
+      const s = String(now.getSeconds()).padStart(2, "0");
+      setClock(`${h}:${m}:${s}`);
+      const days = [
+        "Sunday",
+        "Monday",
+        "Tuesday",
+        "Wednesday",
+        "Thursday",
+        "Friday",
+        "Saturday",
+      ];
+      const months = [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ];
+      setDateStr(
+        `${days[now.getDay()]}, ${String(now.getDate()).padStart(2, "0")} ${months[now.getMonth()]} ${now.getFullYear()}`,
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const handleNewCheckin = useCallback((entry: LastCheckin) => {
+    setCheckin(entry);
+    setVisible(true);
+    setRecentCheckins((prev) => {
+      const updated = [
+        entry,
+        ...prev.filter(
+          (c) => c.personId !== entry.personId || c.inTime !== entry.inTime,
+        ),
+      ];
+      return updated.slice(0, 5);
+    });
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = setTimeout(() => setVisible(false), 6000);
+  }, []);
+
+  // Listen for checkin events
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const data: LastCheckin = JSON.parse(
+          localStorage.getItem("erp_last_checkin") || "null",
+        );
+        if (data) handleNewCheckin(data);
+      } catch {
+        // ignore
+      }
+    };
+    window.addEventListener("erp_last_checkin_updated", handler);
+    // Poll fallback: track last seen to avoid duplicates
+    let lastSeenKey = "";
+    const pollId = setInterval(() => {
+      try {
+        const raw = localStorage.getItem("erp_last_checkin");
+        if (!raw || raw === lastSeenKey) return;
+        const data: LastCheckin = JSON.parse(raw);
+        if (data) {
+          const key = `${data.personId}_${data.inTime}`;
+          if (key !== lastSeenKey) {
+            lastSeenKey = key;
+            handleNewCheckin(data);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }, 2000);
+    return () => {
+      window.removeEventListener("erp_last_checkin_updated", handler);
+      clearInterval(pollId);
+    };
+  }, [handleNewCheckin]);
+
+  function getInitials(name: string): string {
+    return name
+      .split(" ")
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase();
+  }
+
+  const GRADIENT_COLORS = [
+    "from-blue-900 to-indigo-900",
+    "from-emerald-900 to-teal-900",
+    "from-purple-900 to-violet-900",
+    "from-rose-900 to-pink-900",
+    "from-amber-900 to-orange-900",
+  ];
+
+  function getColorForName(name: string): string {
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash += name.charCodeAt(i);
+    return GRADIENT_COLORS[hash % GRADIENT_COLORS.length];
+  }
+
+  return (
+    <div
+      className="rounded-2xl overflow-hidden relative"
+      style={{
+        minHeight: 520,
+        background:
+          "linear-gradient(135deg, #0a0f1e 0%, #0d1635 40%, #0a1628 100%)",
+        border: "1px solid rgba(99,102,241,0.2)",
+      }}
+      data-ocid="attendance.display.panel"
+    >
+      {/* Decorative grid background */}
+      <div
+        className="absolute inset-0 pointer-events-none opacity-5"
+        style={{
+          backgroundImage:
+            "linear-gradient(#4f46e5 1px, transparent 1px), linear-gradient(90deg, #4f46e5 1px, transparent 1px)",
+          backgroundSize: "40px 40px",
+        }}
+      />
+
+      {/* Main content */}
+      <div className="relative z-10 flex flex-col" style={{ minHeight: 520 }}>
+        {/* Idle state */}
+        <div
+          className="transition-all duration-500"
+          style={{
+            opacity: visible ? 0 : 1,
+            pointerEvents: visible ? "none" : "auto",
+          }}
+        >
+          <div
+            className="flex flex-col items-center justify-center"
+            style={{ minHeight: 440, paddingTop: 24 }}
+          >
+            {/* School crest */}
+            <div
+              className="w-20 h-20 rounded-full flex items-center justify-center mb-6"
+              style={{
+                background: "linear-gradient(135deg, #16a34a, #065f46)",
+                boxShadow:
+                  "0 0 40px rgba(22,163,74,0.4), 0 0 80px rgba(22,163,74,0.15)",
+              }}
+            >
+              <span className="text-white text-3xl font-black">
+                {schoolName[0] || "S"}
+              </span>
+            </div>
+
+            <h1
+              className="text-white text-center font-black mb-1"
+              style={{
+                fontSize: 28,
+                letterSpacing: 3,
+                textShadow: "0 0 30px rgba(99,102,241,0.5)",
+              }}
+            >
+              {schoolName.toUpperCase()}
+            </h1>
+
+            {/* Clock */}
+            <div
+              className="font-mono font-bold my-4"
+              style={{
+                fontSize: 72,
+                color: "#a5f3fc",
+                textShadow:
+                  "0 0 20px rgba(165,243,252,0.5), 0 0 40px rgba(165,243,252,0.2)",
+                letterSpacing: 4,
+              }}
+            >
+              {clock}
+            </div>
+
+            <div
+              className="text-center"
+              style={{ fontSize: 20, color: "#94a3b8", letterSpacing: 2 }}
+            >
+              {dateStr}
+            </div>
+
+            {/* Scan prompt */}
+            <div className="mt-8 flex flex-col items-center gap-2">
+              <div
+                className="px-8 py-4 rounded-2xl text-center"
+                style={{
+                  background: "rgba(22,163,74,0.1)",
+                  border: "2px solid rgba(22,163,74,0.4)",
+                  animation: "pulse 2s ease-in-out infinite",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 18,
+                    color: "#4ade80",
+                    fontWeight: 700,
+                    letterSpacing: 2,
+                  }}
+                >
+                  🏫 SCAN YOUR CARD TO CHECK IN
+                </p>
+              </div>
+              <p className="text-gray-500 text-xs mt-2">
+                RFID • QR Code • Biometric
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Active check-in card (overlaid) */}
+        {checkin && (
+          <div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{
+              opacity: visible ? 1 : 0,
+              transform: visible
+                ? "translateY(0) scale(1)"
+                : "translateY(20px) scale(0.98)",
+              transition: "opacity 0.5s ease, transform 0.5s ease",
+              pointerEvents: visible ? "auto" : "none",
+              padding: "24px 24px 80px",
+            }}
+          >
+            <div
+              className={`w-full max-w-2xl rounded-3xl overflow-hidden bg-gradient-to-br ${getColorForName(checkin.name)}`}
+              style={{
+                boxShadow:
+                  "0 25px 80px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.1)",
+              }}
+            >
+              {/* Welcome banner */}
+              <div
+                className="text-center py-4"
+                style={{
+                  background:
+                    "linear-gradient(90deg, #16a34a, #15803d, #16a34a)",
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: 22,
+                    fontWeight: 900,
+                    color: "#fff",
+                    letterSpacing: 3,
+                  }}
+                >
+                  🎉 WELCOME TO SCHOOL!
+                </p>
+              </div>
+
+              <div className="flex gap-6 p-8">
+                {/* Photo / Avatar */}
+                <div className="flex-shrink-0">
+                  {checkin.photo ? (
+                    <img
+                      src={checkin.photo}
+                      alt={checkin.name}
+                      className="rounded-2xl object-cover"
+                      style={{
+                        width: 140,
+                        height: 160,
+                        border: "4px solid rgba(255,255,255,0.2)",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      className="rounded-2xl flex items-center justify-center"
+                      style={{
+                        width: 140,
+                        height: 160,
+                        background: "rgba(255,255,255,0.1)",
+                        border: "4px solid rgba(255,255,255,0.2)",
+                        fontSize: 60,
+                        fontWeight: 900,
+                        color: "rgba(255,255,255,0.9)",
+                      }}
+                    >
+                      {getInitials(checkin.name)}
+                    </div>
+                  )}
+                  {/* Type badge */}
+                  <div
+                    className="mt-3 text-center rounded-lg py-1"
+                    style={{
+                      background:
+                        checkin.type === "Student"
+                          ? "rgba(59,130,246,0.4)"
+                          : "rgba(168,85,247,0.4)",
+                      border:
+                        checkin.type === "Student"
+                          ? "1px solid rgba(59,130,246,0.6)"
+                          : "1px solid rgba(168,85,247,0.6)",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 800,
+                        color:
+                          checkin.type === "Student" ? "#93c5fd" : "#d8b4fe",
+                        letterSpacing: 2,
+                      }}
+                    >
+                      {checkin.type === "Student" ? "📚 STUDENT" : "👨‍🏫 STAFF"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Details */}
+                <div className="flex-1 flex flex-col justify-between">
+                  <div>
+                    <p
+                      style={{
+                        fontSize: 44,
+                        fontWeight: 900,
+                        color: "#fff",
+                        lineHeight: 1.1,
+                        textShadow: "0 2px 10px rgba(0,0,0,0.5)",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {checkin.name}
+                    </p>
+
+                    {checkin.type === "Student" && checkin.fatherName && (
+                      <p
+                        style={{
+                          fontSize: 16,
+                          color: "rgba(255,255,255,0.7)",
+                          marginTop: 8,
+                        }}
+                      >
+                        S/O:{" "}
+                        <span style={{ color: "#fde68a", fontWeight: 700 }}>
+                          {checkin.fatherName}
+                        </span>
+                      </p>
+                    )}
+
+                    {checkin.type === "Student" && (
+                      <p
+                        style={{
+                          fontSize: 15,
+                          color: "rgba(255,255,255,0.6)",
+                          marginTop: 4,
+                        }}
+                      >
+                        Class:{" "}
+                        <span style={{ color: "#a5f3fc", fontWeight: 700 }}>
+                          {checkin.className}
+                          {checkin.section ? ` - ${checkin.section}` : ""}
+                        </span>
+                      </p>
+                    )}
+
+                    {checkin.type === "Staff" && checkin.designation && (
+                      <p
+                        style={{
+                          fontSize: 18,
+                          color: "#fde68a",
+                          fontWeight: 700,
+                          marginTop: 8,
+                        }}
+                      >
+                        {checkin.designation}
+                      </p>
+                    )}
+
+                    {checkin.type === "Staff" && (
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "rgba(255,255,255,0.5)",
+                          marginTop: 4,
+                        }}
+                      >
+                        Department: Staff
+                      </p>
+                    )}
+
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(255,255,255,0.35)",
+                        marginTop: 6,
+                        letterSpacing: 1,
+                      }}
+                    >
+                      ID: {checkin.personId}
+                    </p>
+                  </div>
+
+                  {/* Entry time */}
+                  <div
+                    className="rounded-2xl px-5 py-4 mt-4"
+                    style={{
+                      background: "rgba(0,0,0,0.3)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(255,255,255,0.4)",
+                        letterSpacing: 2,
+                        textTransform: "uppercase",
+                        marginBottom: 4,
+                      }}
+                    >
+                      Entry Time
+                    </p>
+                    <p
+                      style={{
+                        fontSize: 36,
+                        fontWeight: 900,
+                        color: "#4ade80",
+                        fontFamily: "monospace",
+                        letterSpacing: 2,
+                        textShadow: "0 0 15px rgba(74,222,128,0.5)",
+                      }}
+                    >
+                      {checkin.inTime}
+                    </p>
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(255,255,255,0.3)",
+                        marginTop: 2,
+                      }}
+                    >
+                      {checkin.date}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Recent checkins ticker */}
+        {recentCheckins.length > 0 && (
+          <div
+            className="absolute bottom-0 left-0 right-0 px-4 pb-4"
+            style={{ opacity: visible ? 0.6 : 1, transition: "opacity 0.3s" }}
+          >
+            <p className="text-[10px] text-gray-600 mb-2 uppercase tracking-widest">
+              Recent Check-ins
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {recentCheckins.map((c, i) => (
+                <div
+                  key={`${c.personId}-${i}`}
+                  className="flex-shrink-0 flex items-center gap-2 rounded-xl px-3 py-2"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    minWidth: 150,
+                  }}
+                >
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: "rgba(99,102,241,0.3)",
+                      fontSize: 10,
+                      fontWeight: 800,
+                      color: "#c7d2fe",
+                    }}
+                  >
+                    {c.name
+                      .split(" ")
+                      .slice(0, 2)
+                      .map((w: string) => w[0])
+                      .join("")
+                      .toUpperCase()}
+                  </div>
+                  <div>
+                    <p
+                      className="text-white text-[10px] font-medium leading-none truncate"
+                      style={{ maxWidth: 90 }}
+                    >
+                      {c.name}
+                    </p>
+                    <p className="text-gray-500 text-[9px] mt-0.5">
+                      {c.inTime}
+                    </p>
+                  </div>
+                  <span
+                    className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded"
+                    style={{
+                      background:
+                        c.type === "Student"
+                          ? "rgba(59,130,246,0.2)"
+                          : "rgba(168,85,247,0.2)",
+                      color: c.type === "Student" ? "#93c5fd" : "#d8b4fe",
+                    }}
+                  >
+                    {c.type === "Student" ? "STU" : "STF"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.75; transform: scale(0.99); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── RFID/Biometric Tab ────────────────────────────────────────────────────────────────
 function RFIDTab() {
   const [log, setLog] = useState<BiometricEntry[]>(loadBioLog);
   const [filterDate, setFilterDate] = useState(todayDate());
@@ -92,6 +665,9 @@ function RFIDTab() {
       name: string;
       className?: string;
       designation?: string;
+      fatherName?: string;
+      section?: string;
+      photo?: string;
     }>
   >([]);
   const [selectedPerson, setSelectedPerson] = useState<{
@@ -99,9 +675,21 @@ function RFIDTab() {
     name: string;
     className?: string;
     designation?: string;
+    fatherName?: string;
+    section?: string;
+    photo?: string;
   } | null>(null);
 
   const allStudents: StudentRow[] = useMemo(() => {
+    try {
+      const data = JSON.parse(localStorage.getItem("erp_students") || "[]");
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const allStudentsFull = useMemo(() => {
     try {
       const data = JSON.parse(localStorage.getItem("erp_students") || "[]");
       return Array.isArray(data) ? data : [];
@@ -141,14 +729,21 @@ function RFIDTab() {
     const q = manualSearch.toLowerCase();
     if (manualPersonType === "Student") {
       setManualSearchResults(
-        allStudents
+        allStudentsFull
           .filter(
-            (s) =>
+            (s: any) =>
               s.name.toLowerCase().includes(q) ||
               s.admNo.toLowerCase().includes(q),
           )
           .slice(0, 8)
-          .map((s) => ({ id: s.admNo, name: s.name, className: s.className })),
+          .map((s: any) => ({
+            id: s.admNo,
+            name: s.name,
+            className: s.className,
+            section: s.section,
+            fatherName: s.fatherName,
+            photo: s.photo,
+          })),
       );
     } else {
       setManualSearchResults(
@@ -162,7 +757,7 @@ function RFIDTab() {
           })),
       );
     }
-  }, [manualSearch, manualPersonType, allStudents, allStaff]);
+  }, [manualSearch, manualPersonType, allStudentsFull, allStaff]);
 
   const filteredLog = useMemo(() => {
     return log.filter((e) => {
@@ -189,13 +784,19 @@ function RFIDTab() {
       name: string;
       type: "Student" | "Staff";
       className?: string;
+      section?: string;
       designation?: string;
+      fatherName?: string;
+      photo?: string;
     }> = [
-      ...allStudents.map((s) => ({
+      ...allStudentsFull.map((s: any) => ({
         id: s.admNo,
         name: s.name,
         type: "Student" as const,
         className: s.className,
+        section: s.section,
+        fatherName: s.fatherName,
+        photo: s.photo,
       })),
       ...allStaff.map((s) => ({
         id: String(s.id),
@@ -217,20 +818,46 @@ function RFIDTab() {
     let updatedLog: BiometricEntry[];
     let action: string;
     if (!existingEntry) {
+      const inT = nowTime();
       const newEntry: BiometricEntry = {
         id: `${person.id}_${today}_${Date.now()}`,
         personId: person.id,
         name: person.name,
         type: person.type,
         className: person.className,
+        section: person.section,
         designation: person.designation,
+        fatherName: person.fatherName,
+        photo: person.photo,
         date: today,
-        inTime: nowTime(),
+        inTime: inT,
         outTime: "",
         deviceType: "RFID",
       };
       updatedLog = [...currentLog, newEntry];
       action = "IN";
+
+      // Broadcast to Welcome Display
+      broadcastCheckin({
+        personId: person.id,
+        name: person.name,
+        type: person.type,
+        className: person.className,
+        section: person.section,
+        designation: person.designation,
+        fatherName: person.fatherName,
+        photo: person.photo,
+        inTime: inT,
+        date: today,
+      });
+
+      // ERP Notification
+      addERPNotification({
+        type: "checkin",
+        icon: "📍",
+        title: `${person.name} Checked In`,
+        message: `${person.type === "Student" ? `Class ${person.className}` : person.designation || "Staff"} • ${inT}`,
+      });
     } else if (!existingEntry.outTime) {
       updatedLog = currentLog.map((e) =>
         e.id === existingEntry.id ? { ...e, outTime: nowTime() } : e,
@@ -263,7 +890,10 @@ function RFIDTab() {
       name: selectedPerson.name,
       type: manualPersonType,
       className: selectedPerson.className,
+      section: selectedPerson.section,
       designation: selectedPerson.designation,
+      fatherName: selectedPerson.fatherName,
+      photo: selectedPerson.photo,
       date: manualDate,
       inTime: manualInTime,
       outTime: manualOutTime,
@@ -272,6 +902,29 @@ function RFIDTab() {
     const updatedLog = [...currentLog, newEntry];
     saveBioLog(updatedLog);
     setLog(updatedLog);
+
+    // Broadcast to Welcome Display
+    broadcastCheckin({
+      personId: selectedPerson.id,
+      name: selectedPerson.name,
+      type: manualPersonType,
+      className: selectedPerson.className,
+      section: selectedPerson.section,
+      designation: selectedPerson.designation,
+      fatherName: selectedPerson.fatherName,
+      photo: selectedPerson.photo,
+      inTime: manualInTime,
+      date: manualDate,
+    });
+
+    // ERP Notification
+    addERPNotification({
+      type: "checkin",
+      icon: "📍",
+      title: `${selectedPerson.name} Checked In`,
+      message: `${manualPersonType === "Student" ? `Class ${selectedPerson.className}` : selectedPerson.designation || "Staff"} • ${manualInTime} (Manual)`,
+    });
+
     toast.success("Attendance entry saved!");
     setManualSearch("");
     setSelectedPerson(null);
@@ -746,10 +1399,11 @@ function RFIDTab() {
   );
 }
 
-// ─── Main Attendance Component ────────────────────────────────────────────────
-
+// ─── Main Attendance Component ────────────────────────────────────────────────────────────────
 export function Attendance() {
-  const [tab, setTab] = useState<"student" | "staff" | "rfid">("student");
+  const [tab, setTab] = useState<"student" | "staff" | "rfid" | "display">(
+    "student",
+  );
   const [selectedClass, setSelectedClass] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [attendance, setAttendance] = useState<Record<string, AttStatus>>({});
@@ -775,7 +1429,6 @@ export function Attendance() {
             rollNo: s.rollNo,
           })),
         );
-        // Set default class on first load (functional update - no stale closure)
         if (studs.length > 0) {
           setSelectedClass(
             (prev: string) =>
@@ -860,10 +1513,15 @@ export function Attendance() {
 
   const handleSave = () => {
     setSaved(true);
-    // Persist attendance
     const key = `att_${tab}_${date}_${selectedClass}`;
     localStorage.setItem(key, JSON.stringify(attendance));
     toast.success("Attendance saved!");
+    addERPNotification({
+      type: "attendance",
+      icon: "✅",
+      title: "Attendance Saved",
+      message: `${tab === "student" ? selectedClass : "Staff"} attendance for ${date} saved`,
+    });
     setTimeout(() => setSaved(false), 2000);
   };
 
@@ -877,37 +1535,49 @@ export function Attendance() {
     (s) => s === "Late",
   ).length;
 
+  const TAB_CONFIG = [
+    { key: "student", label: "Student Attendance", icon: <Users size={13} /> },
+    { key: "staff", label: "Staff Attendance", icon: <Users size={13} /> },
+    { key: "rfid", label: "RFID/Biometric", icon: <Cpu size={13} /> },
+    {
+      key: "display",
+      label: "📺 Welcome Display",
+      icon: <Monitor size={13} />,
+    },
+  ] as const;
+
   return (
     <div>
       <h2 className="text-white text-lg font-semibold mb-4">Attendance</h2>
       <div className="flex gap-1 mb-4 flex-wrap">
-        {(["student", "staff", "rfid"] as const).map((t) => (
+        {TAB_CONFIG.map((t) => (
           <button
             type="button"
-            key={t}
+            key={t.key}
             onClick={() => {
-              setTab(t);
-              setAttendance({});
+              setTab(t.key);
+              if (t.key !== "display") setAttendance({});
             }}
-            className={`px-4 py-1.5 rounded text-xs font-medium capitalize transition ${
-              tab === t
-                ? "bg-green-600 text-white"
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded text-xs font-medium capitalize transition ${
+              tab === t.key
+                ? t.key === "display"
+                  ? "bg-indigo-700 text-white"
+                  : "bg-green-600 text-white"
                 : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
-            data-ocid={`attendance.${t}.tab`}
+            data-ocid={`attendance.${t.key}.tab`}
           >
-            {t === "student"
-              ? "Student Attendance"
-              : t === "staff"
-                ? "Staff Attendance"
-                : "RFID/Biometric"}
+            {t.icon}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {tab === "rfid" ? (
-        <RFIDTab />
-      ) : (
+      {tab === "display" && <WelcomeDisplayTab />}
+
+      {tab === "rfid" && <RFIDTab />}
+
+      {(tab === "student" || tab === "staff") && (
         <>
           <div className="flex items-center gap-3 mb-4 flex-wrap">
             <div>
