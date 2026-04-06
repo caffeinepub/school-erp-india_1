@@ -12,6 +12,7 @@ import {
   Shield,
   Smartphone,
   Trash2,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -1068,9 +1069,104 @@ function UserManagementTab() {
   const [pwdSuccess, setPwdSuccess] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
 
+  // Add Staff User modal state
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [addUserForm, setAddUserForm] = useState({
+    fullName: "",
+    position: "",
+    otherPosition: "",
+    mobile: "",
+    password: "",
+  });
+  const [addUserShowPwd, setAddUserShowPwd] = useState(false);
+  const [addUserError, setAddUserError] = useState("");
+
+  const POSITION_OPTIONS = [
+    "Admin",
+    "Receptionist",
+    "Accountant",
+    "Librarian",
+    "Teacher",
+    "Nurse",
+    "Clerk",
+    "Peon",
+    "Driver",
+    "Other",
+  ];
+
+  const POSITION_TO_ROLE: Record<string, Role> = {
+    Admin: "admin",
+    Receptionist: "admin",
+    Accountant: "accountant",
+    Librarian: "librarian",
+    Teacher: "teacher",
+    Nurse: "admin",
+    Clerk: "admin",
+    Peon: "admin",
+    Driver: "driver",
+    Other: "admin",
+  };
+
+  function generatePassword(): string {
+    const chars = "ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let result = "";
+    for (let i = 0; i < 6; i++) {
+      result += chars[Math.floor(Math.random() * chars.length)];
+    }
+    return result;
+  }
+
+  function handleAddUser() {
+    setAddUserError("");
+    if (!addUserForm.fullName.trim()) {
+      setAddUserError("Full Name is required.");
+      return;
+    }
+    if (!addUserForm.position) {
+      setAddUserError("Position / Role is required.");
+      return;
+    }
+    if (!addUserForm.mobile.trim()) {
+      setAddUserError("Mobile No. is required.");
+      return;
+    }
+    if (!addUserForm.password || addUserForm.password.length < 4) {
+      setAddUserError("Password must be at least 4 characters.");
+      return;
+    }
+    const role = POSITION_TO_ROLE[addUserForm.position] ?? "admin";
+    const positionLabel =
+      addUserForm.position === "Other" && addUserForm.otherPosition
+        ? addUserForm.otherPosition
+        : addUserForm.position;
+    const newCred = {
+      userId: addUserForm.mobile.trim(),
+      password: addUserForm.password,
+      name: addUserForm.fullName.trim(),
+      role,
+    };
+    const existing = getAllCredentials();
+    const isDuplicate = existing.some((c) => c.userId === newCred.userId);
+    if (isDuplicate) {
+      setAddUserError(`Username "${newCred.userId}" already exists.`);
+      return;
+    }
+    saveCredentials([...existing, newCred]);
+    toast.success(
+      `Staff user added. Username: ${addUserForm.mobile.trim()} (${positionLabel})`,
+    );
+    setAddUserForm({
+      fullName: "",
+      position: "",
+      otherPosition: "",
+      mobile: "",
+      password: "",
+    });
+    setShowAddUser(false);
+  }
+
   const allCreds = getAllCredentials();
   const DEMO_IDS = new Set(DEMO_USERS.map((u) => u.userId));
-  // Merge demo users with stored credentials
   const allUsers = [
     ...DEMO_USERS.map((u) => {
       const stored = allCreds.find((c) => c.userId === u.userId);
@@ -1165,9 +1261,29 @@ function UserManagementTab() {
       <div className="flex items-center gap-2 mb-4">
         <Shield size={16} className="text-orange-400" />
         <h3 className="text-white text-sm font-medium">User Management</h3>
-        <span className="text-gray-500 text-xs ml-auto">
+        <span className="text-gray-500 text-xs ml-2">
           {filtered.length} users
         </span>
+        {currentUser?.role === "super_admin" && (
+          <button
+            type="button"
+            onClick={() => {
+              setAddUserForm({
+                fullName: "",
+                position: "",
+                otherPosition: "",
+                mobile: "",
+                password: "",
+              });
+              setAddUserError("");
+              setShowAddUser(true);
+            }}
+            className="ml-auto flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded transition"
+            data-ocid="user_management.primary_button"
+          >
+            <Plus size={13} /> Add Staff User
+          </button>
+        )}
       </div>
       <div className="flex gap-2 mb-4 flex-wrap">
         <input
@@ -1184,18 +1300,22 @@ function UserManagementTab() {
           data-ocid="user_management.select"
         >
           <option value="all">All Roles</option>
-          <option value="students">Students</option>
+          <option value="super_admin">Super Admin</option>
+          <option value="admin">Admin</option>
           <option value="teachers">Teachers</option>
+          <option value="accountant">Accountant</option>
+          <option value="librarian">Librarian</option>
+          <option value="students">Students</option>
           <option value="parents">Parents</option>
-          <option value="staff">Staff</option>
+          <option value="driver">Driver</option>
         </select>
       </div>
-      <div className="overflow-x-auto">
+      <div className="rounded-lg overflow-hidden border border-gray-700">
         <table className="w-full text-xs">
           <thead>
             <tr
               style={{
-                background: "#111827",
+                background: "#0d111c",
                 borderBottom: "1px solid #1f2937",
               }}
             >
@@ -1263,6 +1383,7 @@ function UserManagementTab() {
           </div>
         )}
       </div>
+
       {/* Reset Password Modal */}
       {resetModal && (
         <div
@@ -1284,7 +1405,7 @@ function UserManagementTab() {
             </p>
             {pwdSuccess ? (
               <div className="text-center py-6">
-                <div className="text-4xl mb-2">✅</div>
+                <div className="text-4xl mb-2">&#10003;</div>
                 <p className="text-green-400 font-semibold">
                   Password reset successfully!
                 </p>
@@ -1361,6 +1482,196 @@ function UserManagementTab() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Add Staff User Modal */}
+      {showAddUser && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.75)" }}
+          data-ocid="user_management.modal"
+        >
+          <div
+            className="rounded-xl p-6 w-full max-w-md shadow-2xl"
+            style={{ background: "#1a1f2e", border: "1px solid #374151" }}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-white font-semibold">Add Staff User</h3>
+              <button
+                type="button"
+                onClick={() => setShowAddUser(false)}
+                className="text-gray-400 hover:text-white"
+                data-ocid="user_management.close_button"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label
+                  htmlFor="au-name"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Full Name *
+                </label>
+                <input
+                  id="au-name"
+                  value={addUserForm.fullName}
+                  onChange={(e) =>
+                    setAddUserForm((p) => ({ ...p, fullName: e.target.value }))
+                  }
+                  placeholder="e.g. Priya Sharma"
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-green-500"
+                  data-ocid="user_management.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="au-position"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Position / Role *
+                </label>
+                <select
+                  id="au-position"
+                  value={addUserForm.position}
+                  onChange={(e) =>
+                    setAddUserForm((p) => ({
+                      ...p,
+                      position: e.target.value,
+                      otherPosition: "",
+                    }))
+                  }
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-green-500"
+                  data-ocid="user_management.select"
+                >
+                  <option value="">Select Position</option>
+                  {POSITION_OPTIONS.map((pos) => (
+                    <option key={pos} value={pos}>
+                      {pos}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {addUserForm.position === "Other" && (
+                <div>
+                  <label
+                    htmlFor="au-other"
+                    className="text-gray-400 text-xs block mb-1"
+                  >
+                    Specify Position
+                  </label>
+                  <input
+                    id="au-other"
+                    value={addUserForm.otherPosition}
+                    onChange={(e) =>
+                      setAddUserForm((p) => ({
+                        ...p,
+                        otherPosition: e.target.value,
+                      }))
+                    }
+                    placeholder="Enter position title"
+                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-green-500"
+                    data-ocid="user_management.input"
+                  />
+                </div>
+              )}
+              <div>
+                <label
+                  htmlFor="au-mobile"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Mobile No. * (becomes username)
+                </label>
+                <input
+                  id="au-mobile"
+                  value={addUserForm.mobile}
+                  onChange={(e) =>
+                    setAddUserForm((p) => ({ ...p, mobile: e.target.value }))
+                  }
+                  placeholder="10-digit mobile number"
+                  className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-green-500"
+                  data-ocid="user_management.input"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="au-pwd"
+                  className="text-gray-400 text-xs block mb-1"
+                >
+                  Password * (min 4 chars)
+                </label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      id="au-pwd"
+                      type={addUserShowPwd ? "text" : "password"}
+                      value={addUserForm.password}
+                      onChange={(e) =>
+                        setAddUserForm((p) => ({
+                          ...p,
+                          password: e.target.value,
+                        }))
+                      }
+                      className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white text-sm outline-none focus:border-green-500 pr-9"
+                      data-ocid="user_management.input"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAddUserShowPwd((v) => !v)}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                    >
+                      {addUserShowPwd ? (
+                        <EyeOff size={13} />
+                      ) : (
+                        <Eye size={13} />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setAddUserForm((p) => ({
+                        ...p,
+                        password: generatePassword(),
+                      }))
+                    }
+                    className="px-3 py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white rounded text-xs transition"
+                    data-ocid="user_management.button"
+                  >
+                    Generate
+                  </button>
+                </div>
+              </div>
+              {addUserError && (
+                <p
+                  className="text-red-400 text-xs"
+                  data-ocid="user_management.error_state"
+                >
+                  {addUserError}
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2 mt-5">
+              <button
+                type="button"
+                onClick={handleAddUser}
+                className="flex-1 bg-green-600 hover:bg-green-700 text-white rounded px-4 py-2 text-sm font-medium transition"
+                data-ocid="user_management.submit_button"
+              >
+                Add Staff User
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddUser(false)}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white bg-gray-700 hover:bg-gray-600 rounded transition"
+                data-ocid="user_management.cancel_button"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

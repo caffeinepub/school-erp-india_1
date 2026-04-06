@@ -744,8 +744,8 @@ export function TeacherTimetable() {
       }>;
       setSubjectListFromStorage(subs.map((s) => s.name).filter(Boolean));
 
-      // Auto-populate assignments from subject-teacher-class mappings
-      const autoAssignments: TeacherAssignment[] = subs
+      // Auto-populate assignments from subject-teacher-class mappings (legacy fallback)
+      const legacyAssignments: TeacherAssignment[] = subs
         .filter((s) => s.name && s.teacher)
         .map((s) => ({
           id: uid(),
@@ -753,8 +753,98 @@ export function TeacherTimetable() {
           classSection: s.class ? `${s.class.replace("Class ", "")}_A` : "",
           subject: s.name,
         }));
-      if (autoAssignments.length > 0) {
-        setAssignments(autoAssignments);
+
+      // Primary: load from erp_teacher_subject_assignments (set by HR wizard)
+      try {
+        const CLASS_ORDER = [
+          "Nursery",
+          "LKG",
+          "UKG",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10",
+          "11",
+          "12",
+        ];
+        const teacherSubjectData = JSON.parse(
+          localStorage.getItem("erp_teacher_subject_assignments") || "[]",
+        ) as Array<{
+          teacherId: number;
+          teacherName: string;
+          assignments: Array<{
+            subject: string;
+            classFrom: string;
+            classTo: string;
+          }>;
+        }>;
+
+        if (teacherSubjectData.length > 0) {
+          // Load available sections for range expansion
+          let sectionsList: string[] = ["A", "B", "C"];
+          try {
+            const sectionsRaw = JSON.parse(
+              localStorage.getItem("erp_sections") || "[]",
+            ) as Array<{ section?: string }>;
+            if (sectionsRaw.length > 0) {
+              sectionsList = [
+                ...new Set(
+                  sectionsRaw.map((s) => s.section).filter(Boolean) as string[],
+                ),
+              ];
+              if (sectionsList.length === 0) sectionsList = ["A"];
+            }
+          } catch {
+            /* ignore */
+          }
+
+          const expanded: TeacherAssignment[] = [];
+          const seen = new Set<string>();
+
+          for (const teacherRecord of teacherSubjectData) {
+            for (const asgn of teacherRecord.assignments) {
+              if (!asgn.subject) continue;
+              const fromIdx = CLASS_ORDER.indexOf(asgn.classFrom);
+              const toIdx = CLASS_ORDER.indexOf(asgn.classTo);
+              const startIdx = fromIdx >= 0 ? fromIdx : 0;
+              const endIdx = toIdx >= 0 ? toIdx : startIdx;
+              for (let ci = startIdx; ci <= endIdx; ci++) {
+                const cls = CLASS_ORDER[ci];
+                for (const sec of sectionsList) {
+                  const csKey = `${cls}_${sec}`;
+                  const dedupeKey = `${teacherRecord.teacherName}||${csKey}||${asgn.subject}`;
+                  if (!seen.has(dedupeKey)) {
+                    seen.add(dedupeKey);
+                    expanded.push({
+                      id: uid(),
+                      teacherName: teacherRecord.teacherName,
+                      classSection: csKey,
+                      subject: asgn.subject,
+                    });
+                  }
+                }
+              }
+            }
+          }
+
+          if (expanded.length > 0) {
+            setAssignments(expanded);
+          } else if (legacyAssignments.length > 0) {
+            setAssignments(legacyAssignments);
+          }
+        } else if (legacyAssignments.length > 0) {
+          setAssignments(legacyAssignments);
+        }
+      } catch {
+        if (legacyAssignments.length > 0) {
+          setAssignments(legacyAssignments);
+        }
       }
     } catch {
       /* ignore */
@@ -1334,6 +1424,14 @@ export function TeacherTimetable() {
                 </Badge>
               </div>
             </div>
+            {/* Info banner when auto-loaded from teacher profiles */}
+            {assignments.some((a) => a.teacherName && a.subject) && (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-indigo-950/40 border border-indigo-700/30 text-[11px] text-indigo-300 flex items-center gap-1.5">
+                <span>ℹ</span>
+                Auto-loaded from teacher profiles. You can add or remove rows
+                manually.
+              </div>
+            )}
             <div className="flex flex-col gap-2 max-h-80 overflow-y-auto pr-1">
               {assignments.map((row) => (
                 <AssignmentRow
