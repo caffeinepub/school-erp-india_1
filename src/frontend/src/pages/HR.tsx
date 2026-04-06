@@ -1,9 +1,10 @@
-import { Plus, Search, Trash2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Download, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { DateInput } from "../components/DateInput";
 import { generateCredentialsFromData } from "../context/AuthContext";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────────────────
 
 interface SubjectAssignment {
   subject: string;
@@ -30,7 +31,7 @@ interface StaffMember {
   subjectAssignments?: SubjectAssignment[];
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Constants ───────────────────────────────────────────────────────────────────────────
 
 const DESIGNATIONS = [
   "Teacher",
@@ -87,7 +88,7 @@ const SUBJECT_BADGE_COLORS = [
   "bg-teal-900/60 text-teal-300",
 ];
 
-// ─── Empty form factory ───────────────────────────────────────────────────────
+// ─── Empty form factory ───────────────────────────────────────────────────────────────────
 
 function emptyForm() {
   return {
@@ -105,7 +106,7 @@ function emptySubjectRow(): SubjectAssignment {
   return { subject: "", classFrom: "", classTo: "" };
 }
 
-// ─── SubjectRow component ────────────────────────────────────────────────────
+// ─── SubjectRow component ────────────────────────────────────────────────────────────────────
 
 function SubjectRow({
   row,
@@ -201,7 +202,7 @@ function SubjectRow({
   );
 }
 
-// ─── Main component ──────────────────────────────────────────────────────────
+// ─── Main component ─────────────────────────────────────────────────────────────────────────────
 
 export function HumanResource() {
   const [tab, setTab] = useState<"directory" | "payroll" | "leave">(
@@ -218,6 +219,7 @@ export function HumanResource() {
   const [subjectSuggestions, setSubjectSuggestions] =
     useState<string[]>(DEFAULT_SUBJECTS);
   const [stepError, setStepError] = useState("");
+  const importRef = useRef<HTMLInputElement>(null);
 
   // Load subjects from Academics
   useEffect(() => {
@@ -395,6 +397,76 @@ export function HumanResource() {
     setTimeout(() => generateCredentialsFromData(), 100);
   }
 
+  // ─── Export CSV ─────────────────────────────────────────────────────────────────────
+  function exportStaff() {
+    const headers = [
+      "Name",
+      "Designation",
+      "Department",
+      "Salary",
+      "Contact",
+      "DOB",
+      "Join Date",
+      "Status",
+    ];
+    const rows = staff.map((s) => [
+      s.name,
+      s.designation,
+      s.department,
+      String(s.salary),
+      s.contact,
+      s.dob,
+      s.joinDate,
+      s.status,
+    ]);
+    const csv = [headers, ...rows]
+      .map((r) => r.map((v) => `"${(v || "").replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "staff_export.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ─── Import CSV ─────────────────────────────────────────────────────────────────────
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target?.result as string;
+      const lines = text.trim().split("\n");
+      if (lines.length < 2) return;
+      // skip header row
+      const imported: StaffMember[] = lines
+        .slice(1)
+        .map((line, i) => {
+          const cols = line
+            .split(",")
+            .map((c) => c.trim().replace(/^"|"$/g, "").replace(/""/g, '"'));
+          return {
+            id: Date.now() + i,
+            name: cols[0] || "",
+            designation: cols[1] || "",
+            department: cols[2] || "",
+            salary: Number(cols[3]) || 0,
+            contact: cols[4] || "",
+            dob: cols[5] || "",
+            joinDate: cols[6] || "",
+            status: (cols[7] as "Active" | "Inactive") || "Active",
+          };
+        })
+        .filter((s) => s.name.trim());
+      setStaff((prev) => [...prev, ...imported]);
+      toast.success(`Imported ${imported.length} staff member(s)`);
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
   const totalPayroll = staff
     .filter((s) => s.status === "Active")
     .reduce((sum, s) => sum + s.salary, 0);
@@ -432,7 +504,7 @@ export function HumanResource() {
         ))}
       </div>
 
-      {/* ── DIRECTORY TAB ─────────────────────────────────────────────────── */}
+      {/* ── DIRECTORY TAB ────────────────────────────────────────────────────────────────────── */}
       {tab === "directory" && (
         <div>
           <div className="flex justify-between items-center mb-3">
@@ -452,14 +524,47 @@ export function HumanResource() {
                 />
               </div>
             </div>
-            <button
-              type="button"
-              onClick={openModal}
-              className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded"
-              data-ocid="hr.staff.primary_button"
-            >
-              <Plus size={14} /> Add Staff
-            </button>
+            <div className="flex items-center gap-2">
+              {/* Export CSV */}
+              <button
+                type="button"
+                onClick={exportStaff}
+                className="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 text-white text-xs px-3 py-1.5 rounded"
+                data-ocid="hr.staff.secondary_button"
+              >
+                <Download size={14} /> Export CSV
+              </button>
+
+              {/* Import CSV */}
+              <>
+                <input
+                  ref={importRef}
+                  type="file"
+                  accept=".csv"
+                  onChange={handleImport}
+                  className="hidden"
+                  id="staff-import-input"
+                />
+                <button
+                  type="button"
+                  onClick={() => importRef.current?.click()}
+                  className="flex items-center gap-1 bg-blue-700 hover:bg-blue-600 text-white text-xs px-3 py-1.5 rounded"
+                  data-ocid="hr.staff.upload_button"
+                >
+                  <Upload size={14} /> Import CSV
+                </button>
+              </>
+
+              {/* Add Staff */}
+              <button
+                type="button"
+                onClick={openModal}
+                className="flex items-center gap-1 bg-green-600 hover:bg-green-700 text-white text-xs px-3 py-1.5 rounded"
+                data-ocid="hr.staff.primary_button"
+              >
+                <Plus size={14} /> Add Staff
+              </button>
+            </div>
           </div>
           <div className="rounded-lg overflow-hidden border border-gray-700">
             <table className="w-full text-xs">
@@ -517,7 +622,11 @@ export function HumanResource() {
                             {s.subjectAssignments.map((a, si) => (
                               <span
                                 key={`${a.subject}-${si}`}
-                                className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${SUBJECT_BADGE_COLORS[si % SUBJECT_BADGE_COLORS.length]}`}
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                  SUBJECT_BADGE_COLORS[
+                                    si % SUBJECT_BADGE_COLORS.length
+                                  ]
+                                }`}
                               >
                                 {a.subject}
                                 {a.classFrom && a.classTo
@@ -549,7 +658,7 @@ export function HumanResource() {
         </div>
       )}
 
-      {/* ── PAYROLL TAB ───────────────────────────────────────────────────── */}
+      {/* ── PAYROLL TAB ──────────────────────────────────────────────────────────────────────── */}
       {tab === "payroll" && (
         <div>
           <div className="grid grid-cols-3 gap-3 mb-4">
@@ -642,7 +751,7 @@ export function HumanResource() {
         </div>
       )}
 
-      {/* ── LEAVE TAB ─────────────────────────────────────────────────────── */}
+      {/* ── LEAVE TAB ───────────────────────────────────────────────────────────────────────── */}
       {tab === "leave" && (
         <div
           className="rounded-lg p-4 max-w-lg"
@@ -655,7 +764,7 @@ export function HumanResource() {
         </div>
       )}
 
-      {/* ── ADD STAFF MODAL ───────────────────────────────────────────────── */}
+      {/* ── ADD STAFF MODAL ────────────────────────────────────────────────────────────────── */}
       {showModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div
